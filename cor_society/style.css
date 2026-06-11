@@ -4,7 +4,7 @@
 
 .cor-society-player-crest-badge {
   position: fixed;
-  z-index: 30;
+  z-index: 9999;
   pointer-events: none;
   object-fit: contain;
   filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.45));

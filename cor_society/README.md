@@ -13,6 +13,7 @@ Roman Society adds a living social layer to Citizen of Rome.
 - Adds a separate global `House Shield` action for editing the player's shield without cluttering the Society menus.
 - Tracks persistent relationships, favors, rivalries, patronage, trade ties, and recent affairs.
 - Lets the player interact with houses and notable characters.
+- Lets the player arrange marriages between unmarried adults from their household and NPC houses using the game's marriage API.
 - Applies real game effects through cash, prestige, influence, revenue modifiers, and monthly events.
 - Lets houses play their own monthly social game through wealth, power, stability, agendas, family events, and inter-house relationships.
 - Gives each house a separate virtual-player state: AI cash, AI influence, AI prestige, property, focus, and controller marker.
@@ -31,7 +32,9 @@ Roman Society adds a living social layer to Citizen of Rome.
 
 The mod uses the game's existing characters and dynasties first. Generated houses are only added when a social order has too few living non-household characters.
 
-Generated people are created with the game's own `daapi.generateCharacter` flow. Society menus first try to display vanilla character portraits from the game; if that fails on a platform or character, the mod generates a stable portrait from the character's name, age, gender, and look data.
+Generated people are created with the game's own `daapi.generateCharacter` flow. Society menus first try to display vanilla character portraits from the game; if that fails on a platform or character, the mod generates a stable Roman-style portrait from the character's name, age, gender, look data, job, and social order.
+
+Arranged marriages call `daapi.performMarriage`, so the resulting spouse relationship should appear in the vanilla family UI after the game refreshes.
 
 House shields are generated locally as SVG images and saved in the mod state. NPC house shields appear beside family portraits in Society lists. The player shield is configured from the `House Shield` global action and is shown as a small portrait badge when the mod can identify the current player portrait in the UI.
 

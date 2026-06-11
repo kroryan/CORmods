@@ -1387,6 +1387,8 @@
           let giftCost = this.actionCost(house, 'gift')
           let dinnerCost = this.actionCost(house, 'dinner')
           let canAsk = (house.favor || 0) > 0 || (house.relation || 0) >= 28
+          let playerMarriageCandidates = this.playerMarriageCandidates(state)
+          let houseMarriageCandidates = this.houseMarriageCandidates(house, state)
           let message = [
             'Order: ' + profile.title,
             'Citizen rank: ' + (house.citizenRank || 'Unknown'),
@@ -1415,6 +1417,18 @@
                 action: {
                   event: this.event,
                   method: 'openPeople',
+                  context: { houseId }
+                }
+              },
+              {
+                variant: 'info',
+                text: 'Arrange marriage',
+                disabled: !playerMarriageCandidates.length || !houseMarriageCandidates.length,
+                showDisabledWithTooltip: true,
+                tooltip: 'Marry an unmarried adult from your household to an unmarried adult from this house. Uses the game marriage API.',
+                action: {
+                  event: this.event,
+                  method: 'openMarriageHousehold',
                   context: { houseId }
                 }
               },
@@ -1498,7 +1512,7 @@
             return {
               text: character ? this.characterName(character, state) : characterId,
               tooltip: character ? this.characterTooltip(character, state) : '',
-              icons: character ? [this.characterPortrait(character, state), this.houseCrestIcon(society, house)] : [this.houseCrestIcon(society, house)],
+              icons: character ? [this.characterPortrait(character, state, house), this.houseCrestIcon(society, house)] : [this.houseCrestIcon(society, house)],
               action: {
                 event: this.event,
                 method: 'openPerson',
@@ -1538,7 +1552,7 @@
           daapi.pushInteractionModalQueue({
             title: this.characterName(character, state),
             message,
-            image: this.characterPortrait(character, state),
+            image: this.characterPortrait(character, state, house),
             options: [
               {
                 text: 'Praise in public',
@@ -1574,6 +1588,167 @@
                 action: {
                   event: this.event,
                   method: 'openPeople',
+                  context: { houseId }
+                }
+              }
+            ]
+          })
+        },
+        openMarriageHousehold({ houseId }) {
+          let society = this.ensure()
+          let state = daapi.getState()
+          let house = society.houses[houseId]
+          if (!house) {
+            this.openHub()
+            return
+          }
+          let candidates = this.playerMarriageCandidates(state)
+          let options = candidates.slice(0, 12).map((character) => {
+            return {
+              text: this.characterName(character, state),
+              tooltip: this.characterTooltip(character, state),
+              icons: [this.characterPortrait(character, state)],
+              action: {
+                event: this.event,
+                method: 'openMarriageCandidates',
+                context: { houseId, playerCharacterId: character.id }
+              }
+            }
+          })
+          options.push({
+            text: 'Back',
+            action: {
+              event: this.event,
+              method: 'openHouse',
+              context: { houseId }
+            }
+          })
+          daapi.pushInteractionModalQueue({
+            title: 'Arrange marriage',
+            message: candidates.length ? 'Choose a member of your household.' : 'No unmarried adult in your household is available.',
+            image: this.houseCrestIcon(society, house),
+            options
+          })
+        },
+        openMarriageCandidates({ houseId, playerCharacterId }) {
+          let society = this.ensure()
+          let state = daapi.getState()
+          let house = society.houses[houseId]
+          let playerCharacter = state.characters[playerCharacterId]
+          if (!house || !playerCharacter) {
+            this.openHouse({ houseId })
+            return
+          }
+          let candidates = this.houseMarriageCandidates(house, state, playerCharacter)
+          let options = candidates.slice(0, 12).map((character) => {
+            return {
+              text: this.characterName(character, state),
+              tooltip: this.characterTooltip(character, state),
+              icons: [this.characterPortrait(character, state, house), this.houseCrestIcon(society, house)],
+              action: {
+                event: this.event,
+                method: 'confirmSocietyMarriage',
+                context: { houseId, playerCharacterId, spouseId: character.id }
+              }
+            }
+          })
+          options.push({
+            text: 'Back',
+            action: {
+              event: this.event,
+              method: 'openMarriageHousehold',
+              context: { houseId }
+            }
+          })
+          daapi.pushInteractionModalQueue({
+            title: 'Marriage with ' + house.name,
+            message: candidates.length ? 'Choose a spouse for ' + this.characterName(playerCharacter, state) + '.' : 'No compatible unmarried adult is available in this house.',
+            image: this.characterPortrait(playerCharacter, state),
+            options
+          })
+        },
+        confirmSocietyMarriage({ houseId, playerCharacterId, spouseId }) {
+          let society = this.ensure()
+          let state = daapi.getState()
+          let house = society.houses[houseId]
+          let playerCharacter = state.characters[playerCharacterId]
+          let spouse = state.characters[spouseId]
+          if (!house || !playerCharacter || !spouse) {
+            this.openHouse({ houseId })
+            return
+          }
+          let matrilineal = !this.characterIsMale(playerCharacter)
+          let message = [
+            this.characterName(playerCharacter, state),
+            'and',
+            this.characterName(spouse, state),
+            '',
+            matrilineal ? 'The marriage will be matrilineal, keeping your household line central.' : 'The marriage will follow the usual household line.'
+          ].join('\n')
+          daapi.pushInteractionModalQueue({
+            title: 'Confirm marriage?',
+            message,
+            image: this.characterPortrait(spouse, state, house),
+            options: [
+              {
+                variant: 'info',
+                text: 'Arrange wedding',
+                icons: [this.characterPortrait(playerCharacter, state), this.characterPortrait(spouse, state, house)],
+                action: {
+                  event: this.event,
+                  method: 'performSocietyMarriage',
+                  context: { houseId, playerCharacterId, spouseId, isMatrilineal: matrilineal }
+                }
+              },
+              {
+                text: 'Cancel',
+                action: {
+                  event: this.event,
+                  method: 'openMarriageCandidates',
+                  context: { houseId, playerCharacterId }
+                }
+              }
+            ]
+          })
+        },
+        performSocietyMarriage({ houseId, playerCharacterId, spouseId, isMatrilineal }) {
+          let society = this.ensure()
+          let state = daapi.getState()
+          let house = society.houses[houseId]
+          let playerCharacter = state.characters[playerCharacterId]
+          let spouse = state.characters[spouseId]
+          if (!house || !playerCharacter || !spouse) {
+            this.openHouse({ houseId })
+            return
+          }
+          try {
+            daapi.performMarriage({ characterId: playerCharacterId, spouseId, isMatrilineal: !!isMatrilineal })
+          } catch (err) {
+            console.warn(err)
+            daapi.updateCharacter({ characterId: playerCharacterId, character: { spouseId } })
+            daapi.updateCharacter({ characterId: spouseId, character: { spouseId: playerCharacterId } })
+          }
+          try {
+            daapi.forceUpdateCharacterDisplay({ characterId: playerCharacterId })
+            daapi.forceUpdateCharacterDisplay({ characterId: spouseId })
+          } catch (err) {
+            console.warn(err)
+          }
+          house.relation = this.clamp((house.relation || 0) + 18, -100, 100)
+          house.favor = (house.favor || 0) + 1
+          house.lastFamilyEvent = 'Marriage alliance with your household.'
+          this.log(society, 'A marriage joins your household with ' + house.name + ': ' + this.characterName(playerCharacter, state) + ' and ' + this.characterName(spouse, state) + '.')
+          this.save(society)
+          daapi.pushInteractionModalQueue({
+            title: 'Marriage arranged',
+            message: this.characterName(spouse, state) + ' is now married to ' + this.characterName(playerCharacter, state) + '. The vanilla family screen should show the spouse link after the game refreshes.',
+            image: this.characterPortrait(spouse, state, house),
+            options: [
+              {
+                text: 'Back to house',
+                action: {
+                  event: this.event,
+                  method: 'openHouse',
                   context: { houseId }
                 }
               }
@@ -1936,6 +2111,59 @@
             'Agenda: ' + (house.agenda || 'unknown')
           ].join('\n')
         },
+        playerMarriageCandidates(state) {
+          let ids = ((state.current || {}).householdCharacterIds || []).slice()
+          let candidates = []
+          ids.forEach((characterId) => {
+            let character = state.characters[characterId]
+            if (this.isMarriageEligible(character, state)) {
+              candidates.push(character)
+            }
+          })
+          return candidates.sort((a, b) => this.age(a, state) - this.age(b, state))
+        },
+        houseMarriageCandidates(house, state, matchCharacter) {
+          let candidates = []
+          this.visibleHousePeople(house, state).forEach((characterId) => {
+            let character = state.characters[characterId]
+            if (!this.isMarriageEligible(character, state)) {
+              return
+            }
+            if (matchCharacter && !this.isMarriageCompatible(matchCharacter, character)) {
+              return
+            }
+            candidates.push(character)
+          })
+          return candidates.sort((a, b) => this.characterScore(b, state) - this.characterScore(a, state))
+        },
+        isMarriageEligible(character, state) {
+          if (!character || character.isDead || character.spouseId) {
+            return false
+          }
+          let age = this.age(character, state)
+          if (age < 16 || age > 60) {
+            return false
+          }
+          if (character.flagCannotMarry) {
+            return false
+          }
+          return true
+        },
+        isMarriageCompatible(first, second) {
+          if (!first || !second || first.id === second.id || first.dynastyId === second.dynastyId) {
+            return false
+          }
+          return this.characterIsMale(first) !== this.characterIsMale(second)
+        },
+        characterIsMale(character) {
+          if (!character) {
+            return false
+          }
+          if (character.gender) {
+            return character.gender === 'male'
+          }
+          return !!character.isMale
+        },
         ensureCrests(society, state) {
           society.crests = society.crests || {}
           society.crestSettings = { playerOverlay: true, ...(society.crestSettings || {}) }
@@ -2167,12 +2395,12 @@
             'Skills: I ' + Math.round(skills.intelligence || 0) + ', S ' + Math.round(skills.stewardship || 0) + ', E ' + Math.round(skills.eloquence || 0) + ', C ' + Math.round(skills.combat || 0)
           ].join('\n')
         },
-        characterPortrait(character, state) {
+        characterPortrait(character, state, house) {
           let portrait = this.vanillaCharacterPortrait(character, state)
           if (this.isImageData(portrait)) {
             return portrait
           }
-          return this.generatedCharacterPortrait(character, state)
+          return this.generatedCharacterPortrait(character, state, house)
         },
         vanillaCharacterPortrait(character, state) {
           try {
@@ -2180,14 +2408,7 @@
             let look = character.look || {}
             let age = this.age(character, state || daapi.getState())
             let gender = character.gender || look.gender || (character.isMale ? 'male' : 'female')
-            let ageStage = 'adult'
-            if (age < 4) {
-              ageStage = 'baby'
-            } else if (age < 16) {
-              ageStage = 'teen'
-            } else if (age >= 55) {
-              ageStage = 'old'
-            }
+            let ageStage = look.ageStage || this.characterAgeStage(age)
             let portrait = daapi.getCharacterIcon({
               group: look.group || 'roman',
               gender,
@@ -2206,9 +2427,12 @@
           if (!value || typeof value !== 'string') {
             return false
           }
-          return value.indexOf('data:image/') === 0 || value.indexOf('http') === 0 || value.indexOf('blob:') === 0
+          if (value.indexOf('data:image/') === 0 || value.indexOf('http') === 0 || value.indexOf('blob:') === 0) {
+            return true
+          }
+          return value.length > 120 && /^[A-Za-z0-9+/=]+$/.test(value.slice(0, 160))
         },
-        generatedCharacterPortrait(character, state) {
+        generatedCharacterPortrait(character, state, house) {
           state = state || daapi.getState()
           character = character || {}
           let look = character.look || {}
@@ -2217,54 +2441,178 @@
           let type = look.type || this.pickByRandom(['brown', 'brown_curly', 'dusky', 'olive', 'tan', 'hazel', 'auburn', 'blonde', 'black'], random)
           let gender = character.gender || look.gender || (character.isMale ? 'male' : 'female')
           let age = this.age(character, state)
+          let ageStage = this.characterAgeStage(age)
           let palette = this.portraitPalette(type)
-          let hair = this.pickByRandom(['short', 'curly', 'waves', 'bald', 'bun', 'veil'], random)
-          if (gender === 'female' && hair === 'bald') {
-            hair = 'bun'
+          let stratum = (house && house.stratum) || ''
+          let role = this.characterPortraitRole(character, ageStage, stratum)
+          let hair = this.pickByRandom(this.hairOptions(gender, ageStage, role), random)
+          if (ageStage === 'baby') {
+            hair = this.pickByRandom(['tuft', 'soft', 'none'], random)
           }
           if (age > 58 && random() > 0.45) {
             palette.hair = '#c7c0ad'
           }
+          let clothing = this.pickByRandom(this.clothingOptions(gender, ageStage, role, stratum), random)
+          let headwear = this.pickByRandom(this.headwearOptions(gender, ageStage, role, stratum), random)
+          let facialHair = gender === 'male' && ageStage !== 'baby' && ageStage !== 'teen' ? this.pickByRandom(['none', 'none', 'shortBeard', 'moustache', 'fullBeard'], random) : 'none'
+          let faceShape = this.pickByRandom(['round', 'oval', 'long', 'square'], random)
+          let expression = this.pickByRandom(['calm', 'stern', 'soft', 'proud'], random)
           let name = this.escapeSvg(character.praenomen || '?').slice(0, 9)
           let svg = ''
           svg += '<svg xmlns="http://www.w3.org/2000/svg" width="144" height="168" viewBox="0 0 144 168">'
-          svg += '<defs><linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#efe3c7"/><stop offset="1" stop-color="#c7a76a"/></linearGradient><clipPath id="round"><rect x="8" y="8" width="128" height="152" rx="18"/></clipPath></defs>'
-          svg += '<rect x="6" y="6" width="132" height="156" rx="20" fill="#231f25"/><rect x="10" y="10" width="124" height="148" rx="16" fill="url(#bg)"/>'
+          svg += '<defs><linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f7f5f2"/><stop offset="1" stop-color="#ded2bd"/></linearGradient><clipPath id="round"><rect x="8" y="8" width="128" height="152" rx="18"/></clipPath></defs>'
+          svg += '<rect x="5" y="5" width="134" height="158" rx="20" fill="#e5e0d7"/><rect x="10" y="10" width="124" height="148" rx="16" fill="url(#bg)"/>'
           svg += '<g clip-path="url(#round)">'
-          svg += '<rect x="10" y="10" width="124" height="148" fill="#d9c18a"/>'
-          svg += '<path d="M0 138 C24 112 44 105 72 105 C101 105 120 113 144 138 V170 H0 Z" fill="' + (gender === 'female' ? '#7c3040' : '#6f5130') + '"/>'
-          svg += '<path d="M45 118 C51 104 93 104 99 118 L108 168 H36 Z" fill="' + palette.tunic + '"/>'
+          svg += this.portraitBackgroundSvg(role, random)
+          if (ageStage === 'baby') {
+            svg += this.generatedBabyPortraitSvg(palette, hair, name)
+            svg += '</g><rect x="10" y="10" width="124" height="148" rx="16" fill="none" stroke="#e8d8b8" stroke-width="4"/>'
+            svg += '<text x="72" y="150" text-anchor="middle" font-family="serif" font-size="13" font-weight="700" fill="#2d2522">' + name + '</text></svg>'
+            return this.svgDataUri(svg)
+          }
+          svg += '<path d="M0 138 C24 112 44 105 72 105 C101 105 120 113 144 138 V170 H0 Z" fill="' + palette.shadow + '"/>'
+          svg += this.generatedClothingSvg(clothing, palette, gender, role)
           svg += '<path d="M53 100 H91 V125 C82 133 62 133 53 125 Z" fill="' + palette.skin + '"/>'
-          svg += '<ellipse cx="72" cy="67" rx="34" ry="43" fill="' + palette.skin + '" stroke="#7c5545" stroke-opacity=".28" stroke-width="2"/>'
-          svg += this.generatedHairSvg(hair, palette.hair)
+          svg += this.generatedHeadSvg(faceShape, palette.skin)
+          svg += this.generatedHairSvg(hair, palette.hair, gender)
+          svg += this.generatedHeadwearSvg(headwear, palette, role)
           svg += '<ellipse cx="58" cy="69" rx="4" ry="3" fill="#2b2523"/><ellipse cx="86" cy="69" rx="4" ry="3" fill="#2b2523"/>'
           svg += '<path d="M68 75 C66 83 66 88 73 88" fill="none" stroke="#7c5545" stroke-width="3" stroke-linecap="round"/>'
-          svg += '<path d="M58 96 C66 103 80 103 88 96" fill="none" stroke="#7c3d34" stroke-width="3" stroke-linecap="round"/>'
-          svg += '<path d="M47 61 C53 56 62 56 67 60 M77 60 C83 56 92 56 97 61" fill="none" stroke="' + palette.hair + '" stroke-width="4" stroke-linecap="round"/>'
+          svg += this.generatedMouthSvg(expression)
+          svg += this.generatedFacialHairSvg(facialHair, palette.hair)
+          svg += this.generatedBrowSvg(expression, palette.hair)
           if (age >= 55) {
             svg += '<path d="M48 82 C55 86 61 86 66 82 M78 82 C84 86 91 86 96 82 M53 104 C65 110 79 110 91 104" fill="none" stroke="#8d7567" stroke-opacity=".45" stroke-width="2" stroke-linecap="round"/>'
           }
           svg += '</g>'
-          svg += '<rect x="10" y="10" width="124" height="148" rx="16" fill="none" stroke="#d6aa3c" stroke-width="4"/>'
+          svg += '<rect x="10" y="10" width="124" height="148" rx="16" fill="none" stroke="#e8d8b8" stroke-width="4"/>'
           svg += '<text x="72" y="150" text-anchor="middle" font-family="serif" font-size="13" font-weight="700" fill="#2d2522">' + name + '</text>'
           svg += '</svg>'
           return this.svgDataUri(svg)
         },
+        characterAgeStage(age) {
+          if (age < 4) return 'baby'
+          if (age < 16) return 'teen'
+          if (age >= 55) return 'old'
+          return 'adult'
+        },
+        characterPortraitRole(character, ageStage, stratum) {
+          if (ageStage === 'baby') return 'baby'
+          if (stratum === 'senatorial') return 'senatorial'
+          if (stratum === 'equestrian') return 'equestrian'
+          if (stratum === 'poor') return 'worker'
+          let job = character.job || ''
+          let traits = character.traits || []
+          if (job === 'senator' || traits.indexOf('senator') >= 0 || traits.indexOf('formerPraetor') >= 0 || traits.indexOf('formerQuaestor') >= 0) return 'senatorial'
+          if (['lawyer', 'rhetor', 'physician'].indexOf(job) >= 0) return 'learned'
+          if (['trader'].indexOf(job) >= 0) return 'merchant'
+          if (['soldier', 'gladiator'].indexOf(job) >= 0 || traits.indexOf('veteran') >= 0 || traits.indexOf('gladiator') >= 0) return 'martial'
+          if (job === 'labourer') return 'worker'
+          return 'citizen'
+        },
         portraitPalette(type) {
           let palettes = {
-            black: { skin: '#6e4a36', hair: '#211716', tunic: '#42536b' },
-            brown: { skin: '#b9825b', hair: '#3b2418', tunic: '#6f5130' },
-            brown_curly: { skin: '#bd8a62', hair: '#322015', tunic: '#6b3f24' },
-            dusky: { skin: '#8a5c43', hair: '#211615', tunic: '#355547' },
-            olive: { skin: '#b69065', hair: '#2f251b', tunic: '#5c2d63' },
-            tan: { skin: '#c99666', hair: '#4a2d1b', tunic: '#8f1f22' },
-            hazel: { skin: '#c18a5f', hair: '#68401e', tunic: '#263f73' },
-            auburn: { skin: '#c58d65', hair: '#7b3a1d', tunic: '#7c3040' },
-            blonde: { skin: '#d0a274', hair: '#b7833b', tunic: '#2f5f45' }
+            black: { skin: '#6e4a36', blush: '#a6725c', hair: '#211716', tunic: '#f3eee6', mantle: '#c39446', stripe: '#8f1f22', shadow: '#b99c6a' },
+            brown: { skin: '#b9825b', blush: '#d09a7f', hair: '#3b2418', tunic: '#f5efe4', mantle: '#c89a49', stripe: '#8f1f22', shadow: '#c5aa76' },
+            brown_curly: { skin: '#bd8a62', blush: '#d3a083', hair: '#322015', tunic: '#f1e7d8', mantle: '#bd8844', stripe: '#7c3040', shadow: '#c7ad80' },
+            dusky: { skin: '#8a5c43', blush: '#b57962', hair: '#211615', tunic: '#efe5d5', mantle: '#b98546', stripe: '#263f73', shadow: '#bca372' },
+            olive: { skin: '#b69065', blush: '#d0a27e', hair: '#2f251b', tunic: '#f3eadc', mantle: '#c29a53', stripe: '#5c2d63', shadow: '#c5ab77' },
+            tan: { skin: '#c99666', blush: '#dda984', hair: '#4a2d1b', tunic: '#f8f1e7', mantle: '#c7a35d', stripe: '#8f1f22', shadow: '#cab07d' },
+            hazel: { skin: '#c18a5f', blush: '#daa080', hair: '#68401e', tunic: '#f4ead9', mantle: '#c79b4a', stripe: '#263f73', shadow: '#c2a671' },
+            auburn: { skin: '#c58d65', blush: '#dda384', hair: '#7b3a1d', tunic: '#f7efe3', mantle: '#c99d4f', stripe: '#7c3040', shadow: '#c9ad7a' },
+            blonde: { skin: '#d0a274', blush: '#e2b18d', hair: '#f3c947', tunic: '#f8f0e5', mantle: '#c99a3c', stripe: '#2f5f45', shadow: '#cdb27f' }
           }
           return palettes[type] || palettes.brown
         },
-        generatedHairSvg(style, color) {
+        hairOptions(gender, ageStage, role) {
+          if (ageStage === 'baby') return ['tuft', 'soft', 'none']
+          if (ageStage === 'teen') return gender === 'female' ? ['bob', 'waves', 'braids', 'bun'] : ['short', 'curly', 'waves', 'capCut']
+          if (gender === 'female') return ['bun', 'veil', 'waves', 'braids', 'bob', 'diademHair']
+          if (role === 'martial') return ['short', 'capCut', 'curly']
+          return ['short', 'curly', 'waves', 'bald', 'capCut']
+        },
+        clothingOptions(gender, ageStage, role, stratum) {
+          if (ageStage === 'teen') return gender === 'female' ? ['childStola', 'palla', 'simpleTunic'] : ['childTunic', 'simpleTunic', 'mantle']
+          if (stratum === 'senatorial') return gender === 'female' ? ['palla', 'purplePalla', 'whiteStola'] : ['senatorToga', 'togaPraetexta', 'togaCandida']
+          if (stratum === 'equestrian') return ['equestrianTunic', 'mantle', 'citizenToga']
+          if (stratum === 'poor') return ['workerTunic', 'brownMantle', 'simpleTunic']
+          if (stratum === 'freedmen') return ['simpleTunic', 'brownMantle', 'mantle']
+          if (role === 'senatorial') return ['senatorToga', 'togaPraetexta', 'togaCandida']
+          if (role === 'equestrian') return ['equestrianTunic', 'mantle', 'citizenToga']
+          if (role === 'martial') return ['militaryCloak', 'armoredTunic', 'redMantle']
+          if (role === 'merchant') return ['mantle', 'equestrianTunic', 'simpleTunic']
+          if (role === 'worker') return ['workerTunic', 'simpleTunic', 'brownMantle']
+          if (gender === 'female') return ['stola', 'palla', 'whiteStola', 'purplePalla']
+          return ['citizenToga', 'mantle', 'simpleTunic', 'whiteToga']
+        },
+        headwearOptions(gender, ageStage, role, stratum) {
+          if (ageStage === 'baby') return ['none']
+          if (stratum === 'senatorial') return gender === 'female' ? ['goldBand', 'laurel', 'veilBand'] : ['laurel', 'laurel', 'goldBand']
+          if (stratum === 'poor' || stratum === 'freedmen') return ['none', 'none']
+          if (role === 'senatorial') return ['none', 'laurel', 'laurel', 'goldBand']
+          if (role === 'equestrian') return ['none', 'goldBand', 'laurel']
+          if (role === 'martial') return ['none', 'softHelmet', 'redCrest']
+          if (gender === 'female') return ['none', 'veilBand', 'goldBand', 'laurel']
+          return ['none', 'none', 'laurel', 'goldBand']
+        },
+        portraitBackgroundSvg(role, random) {
+          let motif = this.pickByRandom(['plain', 'column', 'arch', 'key'], random)
+          let svg = '<rect x="10" y="10" width="124" height="148" fill="#f7f5f2"/>'
+          if (motif === 'column') {
+            svg += '<path d="M22 18 H32 V122 H22 Z M19 21 H35 M18 122 H36" stroke="#d8c9af" stroke-width="4" fill="none" opacity=".7"/><path d="M112 18 H122 V122 H112 Z M109 21 H125 M108 122 H126" stroke="#d8c9af" stroke-width="4" fill="none" opacity=".45"/>'
+          } else if (motif === 'arch') {
+            svg += '<path d="M28 122 V56 C28 28 116 28 116 56 V122" fill="none" stroke="#ded1bd" stroke-width="8" opacity=".6"/>'
+          } else if (motif === 'key') {
+            svg += '<path d="M20 24 H34 V36 H46 V24 H60 V36 H72 V24 H86 V36 H100" fill="none" stroke="#d6aa3c" stroke-width="4" opacity=".45"/>'
+          }
+          if (role === 'senatorial') {
+            svg += '<rect x="10" y="130" width="124" height="10" fill="#8f1f22" opacity=".18"/>'
+          }
+          return svg
+        },
+        generatedBabyPortraitSvg(palette, hair, name) {
+          let svg = ''
+          svg += '<path d="M31 76 C31 45 51 28 72 28 C95 28 113 47 113 77 C113 103 93 122 72 122 C50 122 31 103 31 76 Z" fill="' + palette.skin + '"/>'
+          if (hair !== 'none') {
+            svg += '<path d="M58 35 C65 20 85 26 80 44 C72 37 65 36 58 35 Z" fill="' + palette.hair + '"/>'
+          }
+          svg += '<ellipse cx="59" cy="75" rx="4" ry="3" fill="#6b6b67"/><ellipse cx="85" cy="75" rx="4" ry="3" fill="#6b6b67"/><path d="M62 91 C68 97 77 97 83 91" fill="none" stroke="#b06f61" stroke-width="3" stroke-linecap="round"/>'
+          svg += '<path d="M34 102 C50 88 96 88 112 102 L118 168 H26 Z" fill="#c9a24a"/><path d="M44 111 C58 123 79 132 105 137 M38 132 C57 119 79 108 110 103" fill="none" stroke="#9e793c" stroke-width="4" opacity=".45"/>'
+          return svg
+        },
+        generatedClothingSvg(style, palette, gender, role) {
+          let tunic = palette.tunic
+          let mantle = palette.mantle
+          let stripe = palette.stripe
+          if (style === 'senatorToga') return '<path d="M35 168 L43 119 C50 104 94 104 101 119 L109 168 Z" fill="' + tunic + '"/><path d="M48 113 C70 126 82 143 92 168 H78 C73 148 60 132 43 122 Z" fill="' + stripe + '"/><path d="M33 132 C57 111 91 114 111 141 L106 168 H82 C77 139 55 126 33 132 Z" fill="#eee3d1"/>'
+          if (style === 'togaPraetexta') return '<path d="M34 168 L42 120 C50 104 94 104 102 120 L110 168 Z" fill="#f7efe3"/><path d="M38 132 C61 116 93 120 110 145 L108 168 H92 C85 145 64 130 38 132 Z" fill="#f5e7d1"/><path d="M41 137 C63 126 88 128 105 148" fill="none" stroke="' + stripe + '" stroke-width="7" stroke-linecap="round"/>'
+          if (style === 'togaCandida' || style === 'whiteToga') return '<path d="M34 168 L42 120 C50 104 94 104 102 120 L110 168 Z" fill="#fbf8ef"/><path d="M31 136 C56 113 93 118 113 145 L108 168 H78 C75 146 56 131 31 136 Z" fill="#e9ddca"/>'
+          if (style === 'citizenToga') return '<path d="M35 168 L43 119 C50 105 94 105 101 119 L109 168 Z" fill="#f0e2cf"/><path d="M31 137 C55 114 92 118 113 145 L108 168 H80 C75 145 55 130 31 137 Z" fill="' + mantle + '" opacity=".82"/>'
+          if (style === 'stola' || style === 'whiteStola') return '<path d="M37 168 L43 118 C50 105 94 105 101 118 L107 168 Z" fill="' + (style === 'whiteStola' ? '#f5efe4' : '#e7d4b7') + '"/><path d="M43 124 H101" stroke="' + stripe + '" stroke-width="5"/><path d="M52 118 L48 168 M92 118 L96 168" stroke="#b89a65" stroke-width="3" opacity=".45"/>'
+          if (style === 'palla' || style === 'purplePalla') return '<path d="M35 168 L43 119 C50 105 94 105 101 119 L109 168 Z" fill="#f3eadc"/><path d="M28 135 C47 108 91 101 118 135 L112 168 H83 C78 145 57 128 28 135 Z" fill="' + (style === 'purplePalla' ? '#7c3040' : mantle) + '"/>'
+          if (style === 'militaryCloak' || style === 'redMantle') return '<path d="M37 168 L43 119 C50 105 94 105 101 119 L107 168 Z" fill="#e7d6bd"/><path d="M28 120 C45 110 61 111 72 126 C85 111 104 112 118 124 L112 168 H32 Z" fill="#9d2e26"/><circle cx="94" cy="123" r="6" fill="#d6aa3c"/>'
+          if (style === 'armoredTunic') return '<path d="M38 168 L43 118 C50 105 94 105 101 118 L106 168 Z" fill="#b8a072"/><path d="M45 125 H99 V168 H45 Z" fill="#7f8585"/><path d="M45 137 H99 M45 151 H99 M59 125 V168 M85 125 V168" stroke="#d0d5d5" stroke-width="3" opacity=".55"/>'
+          if (style === 'equestrianTunic') return '<path d="M38 168 L44 118 C51 105 93 105 100 118 L106 168 Z" fill="#f0dfc7"/><path d="M57 116 V168 M87 116 V168" stroke="#263f73" stroke-width="5"/><path d="M34 136 C54 122 88 124 109 143 L106 168 H83 C78 148 56 134 34 136 Z" fill="#c99a3c"/>'
+          if (style === 'workerTunic' || style === 'brownMantle') return '<path d="M38 168 L44 118 C51 105 93 105 100 118 L106 168 Z" fill="#d0b084"/><path d="M31 136 C55 120 86 124 110 144 L106 168 H88 C82 151 58 137 31 136 Z" fill="#8b5a35"/>'
+          if (style === 'childStola' || style === 'childTunic') return '<path d="M39 168 L45 120 C52 106 92 106 99 120 L105 168 Z" fill="' + (gender === 'female' ? '#f0d8c9' : '#e6d6ba') + '"/><path d="M50 122 H94" stroke="' + stripe + '" stroke-width="4" opacity=".7"/>'
+          return '<path d="M38 168 L44 118 C51 105 93 105 100 118 L106 168 Z" fill="' + tunic + '"/><path d="M34 137 C55 122 88 124 109 143 L106 168 H83 C78 148 56 134 34 137 Z" fill="' + mantle + '" opacity=".7"/>'
+        },
+        generatedHeadSvg(shape, skin) {
+          if (shape === 'long') return '<ellipse cx="72" cy="68" rx="31" ry="45" fill="' + skin + '" stroke="#7c5545" stroke-opacity=".25" stroke-width="2"/>'
+          if (shape === 'square') return '<path d="M42 55 C42 34 57 25 72 25 C89 25 102 36 102 55 V78 C102 99 88 112 72 112 C55 112 42 99 42 78 Z" fill="' + skin + '" stroke="#7c5545" stroke-opacity=".25" stroke-width="2"/>'
+          if (shape === 'oval') return '<ellipse cx="72" cy="67" rx="32" ry="43" fill="' + skin + '" stroke="#7c5545" stroke-opacity=".25" stroke-width="2"/>'
+          return '<ellipse cx="72" cy="68" rx="34" ry="40" fill="' + skin + '" stroke="#7c5545" stroke-opacity=".25" stroke-width="2"/>'
+        },
+        generatedHairSvg(style, color, gender) {
+          if (style === 'none') {
+            return ''
+          }
+          if (style === 'tuft') {
+            return '<path d="M60 37 C66 23 84 29 78 45 C72 39 66 38 60 37 Z" fill="' + color + '"/>'
+          }
+          if (style === 'soft') {
+            return '<path d="M50 44 C57 31 82 27 95 47 C80 42 65 42 50 44 Z" fill="' + color + '" opacity=".85"/>'
+          }
           if (style === 'bald') {
             return '<path d="M45 54 C50 28 94 28 99 54 C88 43 56 43 45 54 Z" fill="' + color + '" opacity=".45"/>'
           }
@@ -2278,6 +2626,18 @@
           if (style === 'waves') {
             return '<path d="M38 64 C36 35 53 21 72 21 C94 21 108 38 105 65 C96 49 84 43 69 44 C55 44 45 51 38 64 Z" fill="' + color + '"/><path d="M43 43 C55 33 70 37 82 29 C89 37 97 42 102 55" fill="none" stroke="#f0d7a0" stroke-opacity=".18" stroke-width="4"/>'
           }
+          if (style === 'braids') {
+            return '<path d="M38 66 C35 36 52 22 72 22 C94 22 109 38 106 66 C94 50 50 50 38 66 Z" fill="' + color + '"/><path d="M39 65 C35 86 37 101 49 113 M105 65 C109 86 107 101 95 113" fill="none" stroke="' + color + '" stroke-width="9" stroke-linecap="round"/>'
+          }
+          if (style === 'bob') {
+            return '<path d="M37 65 C34 35 52 22 72 22 C95 22 110 39 107 66 L101 92 C86 84 58 84 43 92 Z" fill="' + color + '"/>'
+          }
+          if (style === 'diademHair') {
+            return '<path d="M38 64 C36 34 53 21 72 21 C95 21 109 38 106 65 C94 49 50 49 38 64 Z" fill="' + color + '"/><path d="M43 47 C57 39 87 39 101 47" fill="none" stroke="#d6aa3c" stroke-width="4" stroke-linecap="round"/>'
+          }
+          if (style === 'capCut') {
+            return '<path d="M40 60 C39 34 55 24 72 24 C92 24 104 37 104 61 C92 48 54 48 40 60 Z" fill="' + color + '"/><path d="M43 59 C49 66 55 68 62 68" fill="none" stroke="' + color + '" stroke-width="8" stroke-linecap="round"/>'
+          }
           if (style === 'bun') {
             return '<path d="M38 66 C36 35 54 22 72 22 C94 22 108 39 106 66 C95 49 49 49 38 66 Z" fill="' + color + '"/><circle cx="107" cy="66" r="12" fill="' + color + '"/>'
           }
@@ -2285,6 +2645,40 @@
             return '<path d="M36 65 C34 34 52 20 72 20 C95 20 110 37 108 66 L104 119 H40 Z" fill="#c9b183"/><path d="M44 62 C49 45 57 36 72 36 C88 36 97 45 101 62 C88 51 57 51 44 62 Z" fill="' + color + '"/>'
           }
           return '<path d="M39 62 C38 35 55 23 72 23 C93 23 105 37 105 63 C94 47 51 47 39 62 Z" fill="' + color + '"/>'
+        },
+        generatedHeadwearSvg(style, palette, role) {
+          if (style === 'laurel') {
+            return '<path d="M41 43 C53 29 91 29 103 43" fill="none" stroke="#d6aa3c" stroke-width="4" stroke-linecap="round"/><path d="M48 40 L39 36 M57 35 L50 29 M67 33 L64 25 M77 33 L80 25 M87 35 L94 29 M96 40 L105 36" stroke="#d6aa3c" stroke-width="3" stroke-linecap="round"/>'
+          }
+          if (style === 'goldBand') {
+            return '<path d="M42 47 C57 39 88 39 102 47" fill="none" stroke="#d6aa3c" stroke-width="5" stroke-linecap="round"/>'
+          }
+          if (style === 'veilBand') {
+            return '<path d="M39 45 C55 36 89 36 105 45" fill="none" stroke="#d6aa3c" stroke-width="4" stroke-linecap="round"/><path d="M37 55 C32 80 38 102 48 122" fill="none" stroke="#d9c9a6" stroke-width="8" opacity=".65"/>'
+          }
+          if (style === 'softHelmet') {
+            return '<path d="M40 53 C42 29 56 19 72 19 C91 19 103 32 104 54 C87 45 57 45 40 53 Z" fill="#c7bda7" stroke="#7f8585" stroke-width="3"/><path d="M72 20 V47" stroke="#8f1f22" stroke-width="5"/>'
+          }
+          if (style === 'redCrest') {
+            return '<path d="M41 53 C43 30 57 21 72 21 C90 21 102 33 103 54 C88 46 56 46 41 53 Z" fill="#c7bda7" stroke="#7f8585" stroke-width="3"/><path d="M56 20 C65 8 82 8 91 20 C78 18 68 18 56 20 Z" fill="#9d2e26"/>'
+          }
+          return ''
+        },
+        generatedBrowSvg(expression, color) {
+          if (expression === 'stern') return '<path d="M47 60 L66 64 M78 64 L97 60" fill="none" stroke="' + color + '" stroke-width="4" stroke-linecap="round"/>'
+          if (expression === 'proud') return '<path d="M47 61 C54 55 61 55 67 60 M77 60 C84 55 91 55 98 61" fill="none" stroke="' + color + '" stroke-width="4" stroke-linecap="round"/>'
+          return '<path d="M47 61 C53 57 62 57 67 60 M77 60 C83 57 92 57 97 61" fill="none" stroke="' + color + '" stroke-width="4" stroke-linecap="round"/>'
+        },
+        generatedMouthSvg(expression) {
+          if (expression === 'stern') return '<path d="M61 98 C69 95 78 95 86 98" fill="none" stroke="#7c3d34" stroke-width="3" stroke-linecap="round"/>'
+          if (expression === 'soft') return '<path d="M60 95 C67 104 79 104 86 95" fill="none" stroke="#b06f61" stroke-width="3" stroke-linecap="round"/>'
+          return '<path d="M58 96 C66 103 80 103 88 96" fill="none" stroke="#7c3d34" stroke-width="3" stroke-linecap="round"/>'
+        },
+        generatedFacialHairSvg(style, color) {
+          if (style === 'shortBeard') return '<path d="M52 92 C57 114 87 114 92 92 C83 101 61 101 52 92 Z" fill="' + color + '" opacity=".72"/>'
+          if (style === 'moustache') return '<path d="M58 88 C64 84 69 85 72 90 C75 85 80 84 86 88" fill="none" stroke="' + color + '" stroke-width="5" stroke-linecap="round"/>'
+          if (style === 'fullBeard') return '<path d="M49 87 C52 119 92 119 95 87 C88 105 56 105 49 87 Z" fill="' + color + '" opacity=".82"/><path d="M58 87 C64 83 69 85 72 90 C75 85 80 83 86 87" fill="none" stroke="' + color + '" stroke-width="4" stroke-linecap="round"/>'
+          return ''
         },
         pickByRandom(list, random) {
           return list[Math.floor(random() * list.length) % list.length]
@@ -2311,7 +2705,7 @@
           state = state || daapi.getState()
           let ids = this.visibleHousePeople(house, state)
           let character = ids.length ? (state.characters[ids[0]] || false) : false
-          return character ? this.characterPortrait(character, state) : daapi.requireImage('/cor_society/icon.svg')
+          return character ? this.characterPortrait(character, state, house) : daapi.requireImage('/cor_society/icon.svg')
         },
         startPlayerCrestOverlay() {
           if (this.playerCrestOverlayStarted) {
@@ -2349,16 +2743,6 @@
           if (!hadCrest) {
             this.save(society)
           }
-          let target = this.findCurrentPortraitImage(state)
-          if (!target) {
-            this.clearPlayerCrestOverlay()
-            return
-          }
-          let rect = target.getBoundingClientRect()
-          if (!rect || rect.width < 28 || rect.height < 28) {
-            this.clearPlayerCrestOverlay()
-            return
-          }
           let badge = document.getElementById('corSocietyPlayerCrestBadge')
           if (!badge) {
             badge = document.createElement('img')
@@ -2368,10 +2752,11 @@
             badge.alt = ''
             document.body.appendChild(badge)
           }
-          let size = Math.max(24, Math.min(42, Math.round(rect.width * 0.38)))
+          let viewportWidth = (typeof window !== 'undefined' && window.innerWidth) ? window.innerWidth : 360
+          let size = Math.max(26, Math.min(38, Math.round(viewportWidth * 0.09)))
           badge.src = this.crestIcon(crest, 96)
-          badge.style.left = Math.round(Math.max(2, rect.left - size * 0.28)) + 'px'
-          badge.style.top = Math.round(Math.max(2, rect.top - size * 0.62)) + 'px'
+          badge.style.left = '6px'
+          badge.style.top = '6px'
           badge.style.width = size + 'px'
           badge.style.height = Math.round(size * 1.15) + 'px'
           badge.style.display = 'block'
@@ -2533,6 +2918,18 @@
     },
     openPerson(args) {
       window.corSociety.openPerson(args || {})
+    },
+    openMarriageHousehold(args) {
+      window.corSociety.openMarriageHousehold(args || {})
+    },
+    openMarriageCandidates(args) {
+      window.corSociety.openMarriageCandidates(args || {})
+    },
+    confirmSocietyMarriage(args) {
+      window.corSociety.confirmSocietyMarriage(args || {})
+    },
+    performSocietyMarriage(args) {
+      window.corSociety.performSocietyMarriage(args || {})
     },
     sendGift(args) {
       window.corSociety.sendGift(args || {})
