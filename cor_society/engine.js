@@ -63,14 +63,14 @@
   },
   methods: {
     boot() {
-      if (window.corSociety && window.corSociety.version === '1.1.5') {
+      if (window.corSociety && window.corSociety.version === '1.1.6') {
         window.corSociety.ensure()
         window.corSociety.startPlayerCrestOverlay()
         return
       }
 
       window.corSociety = {
-        version: '1.1.5',
+        version: '1.1.6',
         event: '/cor_society/engine',
         flag: 'corSocietyState',
         noticeFlag: 'corSocietyInstallNoticeSeen',
@@ -182,19 +182,38 @@
           bone: '#eee0c4',
           copper: '#c87545'
         },
-        ensure() {
+        ensure(options) {
           let state = daapi.getState()
           if (!state || !state.current) {
             return this.createState()
           }
           let society = this.load()
+          let ensureKey = this.ensureKey(society, state)
+          if (!options || !options.force) {
+            if (society.lastEnsureKey === ensureKey) {
+              return society
+            }
+          }
           this.syncWithGame(society, state)
           this.ensureVisibleHouseMembers(society, state)
           state = daapi.getState()
           this.ensureGeneratedLooks(society, state)
           this.ensureCrests(society, state)
+          society.lastEnsureKey = this.ensureKey(society, state)
           this.save(society)
           return society
+        },
+        ensureKey(society, state) {
+          let characterCount = state && state.characters ? Object.keys(state.characters).length : 0
+          let dynastyCount = state && state.dynasties ? Object.keys(state.dynasties).length : 0
+          let houseCount = society && society.houses ? Object.keys(society.houses).length : 0
+          return [
+            this.monthKey(state || {}),
+            characterCount,
+            dynastyCount,
+            houseCount,
+            this.version
+          ].join(':')
         },
         showInstallNoticeOnce() {
           let seen = false
@@ -315,6 +334,8 @@
         },
         pushModal(payload) {
           payload = payload || {}
+          payload.corTranslatorSkipPretranslate = true
+          payload.skipTranslatorPretranslate = true
           payload.options = this.decorateModalOptions(payload.options || [], payload)
           daapi.pushInteractionModalQueue(payload)
         },
@@ -370,7 +391,7 @@
           if (method === 'openMemberGroups') return 'Consequences: opens member groups; no stats change.'
           if (method === 'openMemberGroup') return 'Consequences: opens one member category; no stats change.'
           if (method === 'openPerson') return 'Consequences: opens this character; no stats change.'
-          if (method === 'openVanillaActions') return 'Consequences: opens this character\'s vanilla actions; no stats change yet.'
+          if (method === 'openVanillaActions') return 'Consequences: opens this character\'s vanilla / other mods actions; no stats change yet.'
           if (method === 'openVanillaKnownFamily') return 'Consequences: opens the vanilla known-family screen if the game route is available; no stats change.'
           if (method === 'openVanillaFullFamilyTree') return 'Consequences: opens the vanilla full-family-tree screen if the game route is available; no stats change.'
           if (method === 'openFamilyTree') return 'Consequences: opens Society\'s family-tree view; no stats change.'
@@ -2600,10 +2621,10 @@
             options: [
               {
                 variant: 'info',
-                text: 'Vanilla actions (' + vanillaActions.length + ')',
+                text: 'Vanilla / other mods actions (' + vanillaActions.length + ')',
                 disabled: !vanillaActions.length,
                 showDisabledWithTooltip: true,
-                tooltip: vanillaActions.length ? 'Open actions currently exposed by the base game for this character.' : 'No vanilla character action is currently exposed for this character.',
+                tooltip: vanillaActions.length ? 'Open actions currently exposed by the base game or other mods for this character.' : 'No vanilla or other mod character action is currently exposed for this character.',
                 icons: vanillaActions.length && vanillaActions[0].icon ? [vanillaActions[0].icon] : [this.affairIcon('support')],
                 action: {
                   event: this.event,
@@ -2699,7 +2720,7 @@
             let disabled = action.isAvailable === false || !process
             return {
               text: action.title || item.key,
-              tooltip: action.tooltip || (disabled ? 'This vanilla action is not currently available.' : 'Runs this vanilla character action.'),
+              tooltip: action.tooltip || (disabled ? 'This vanilla / other mod action is not currently available.' : 'Runs this vanilla / other mod character action.'),
               disabled,
               showDisabledWithTooltip: true,
               icons: action.icon ? [action.icon] : [this.characterPortrait(character, state, house)],
@@ -2719,8 +2740,8 @@
             }
           })
           this.pushModal({
-            title: 'Vanilla actions',
-            message: actions.length ? 'Actions currently exposed by the base game for ' + this.characterName(character, state) + '.' : 'No vanilla action is currently exposed for this character.',
+            title: 'Vanilla / other mods actions',
+            message: actions.length ? 'Actions currently exposed by the base game or other mods for ' + this.characterName(character, state) + '.' : 'No vanilla or other mod action is currently exposed for this character.',
             image: this.characterPortrait(character, state, house),
             options
           })
@@ -2736,25 +2757,94 @@
           }
         },
         openVanillaFamilyRoute(characterId, route) {
-          try {
-            let state = daapi.getState()
-            state.current = state.current || {}
-            state.current.selectedCharacterId = characterId
-            if (typeof daapi.forceUpdateCharacterDisplay === 'function') {
-              daapi.forceUpdateCharacterDisplay({ characterId })
-            }
-          } catch (err) {
-            console.warn(err)
+          let state = daapi.getState()
+          if (!state || !state.characters || !state.characters[characterId]) {
+            return false
           }
+          let path = route === '#/fullFamilyTree' || route === '/fullFamilyTree' ? '/fullFamilyTree' : '/knownFamily'
           try {
-            if (typeof window !== 'undefined' && window.location) {
-              window.location.hash = route
-              return true
+            let vueRoot = this.findGameVueRoot()
+            if (vueRoot && vueRoot.$store) {
+              let store = vueRoot.$store
+              if (typeof store.commit === 'function') {
+                store.commit('setSelectedCharacterId', characterId)
+              } else if (store.state && store.state.current) {
+                store.state.current.selectedCharacterId = characterId
+              }
+              if (typeof store.dispatch === 'function') {
+                store.dispatch('forceUpdateStore')
+              }
+              if (vueRoot.$router && typeof vueRoot.$router.push === 'function') {
+                let result = vueRoot.$router.push({ path })
+                if (result && typeof result.catch === 'function') {
+                  result.catch(() => {})
+                }
+                return true
+              }
+              if (typeof window !== 'undefined' && window.location) {
+                window.location.hash = '#' + path
+                return true
+              }
             }
           } catch (err) {
             console.warn(err)
           }
           return false
+        },
+        findGameVueRoot() {
+          if (this.cachedGameVueRoot && this.isGameVueRoot(this.cachedGameVueRoot)) {
+            return this.cachedGameVueRoot
+          }
+          if (typeof document === 'undefined') {
+            return false
+          }
+          let nodes = []
+          let app = document.getElementById('app')
+          if (app) {
+            nodes.push(app)
+          }
+          if (document.body) {
+            nodes.push(document.body)
+          }
+          try {
+            let allNodes = document.querySelectorAll('*')
+            for (let i = 0; i < allNodes.length; i++) {
+              nodes.push(allNodes[i])
+            }
+          } catch (err) {
+            console.warn(err)
+          }
+          for (let i = 0; i < nodes.length; i++) {
+            let vm = nodes[i] && nodes[i].__vue__
+            if (!vm) {
+              continue
+            }
+            let root = this.vueRootFromComponent(vm)
+            if (this.isGameVueRoot(root)) {
+              this.cachedGameVueRoot = root
+              return root
+            }
+          }
+          return false
+        },
+        vueRootFromComponent(vm) {
+          let root = vm && (vm.$root || vm)
+          let guard = 0
+          while (root && root.$parent && guard < 50) {
+            root = root.$parent
+            guard += 1
+          }
+          return root || vm
+        },
+        isGameVueRoot(root) {
+          return !!(
+            root &&
+            root.$store &&
+            root.$router &&
+            root.$store.state &&
+            root.$store.state.current &&
+            root.$store.state.characters
+          )
         },
         openFamilyTree({ houseId, characterId }) {
           let society = this.ensure()

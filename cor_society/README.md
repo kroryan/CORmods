@@ -18,8 +18,8 @@ Roman Society adds a living social layer to Citizen of Rome.
 - Shows past affairs as paged notification-style entries with their own event icons.
 - Uses copied vanilla interface icons for social orders and Society actions where the mod API allows local assets.
 - Lets the player inspect every known living dynasty member through Notables, Established members, and Common kin.
-- Lets the player interact with houses and characters, including Society actions plus vanilla character actions when the base game exposes them.
-- Adds character family navigation: vanilla known-family/full-tree route attempts plus a Society fallback tree using real parent, spouse, child, and sibling IDs.
+- Lets the player interact with houses and characters, including Society actions plus vanilla / other mod character actions when the game exposes them.
+- Adds character family navigation: vanilla known-family/full-tree navigation uses the game's selected-character store state, with a Society fallback tree using real parent, spouse, child, and sibling IDs.
 - Lets the player arrange marriages between unmarried adults from their household and NPC houses using the game's marriage API.
 - Includes the current player character as a marriage candidate when they are unmarried, so starts without a spouse and sudden succession cases can still use Society marriages.
 - Shows short parenthesized reasons when marriage is unavailable, such as no adult, too high, too low, or required relation.
@@ -58,4 +58,4 @@ House shields are generated locally as SVG images and saved in the mod state. NP
 
 Each month, houses pursue their own agenda. Some affairs only change the social map and appear in `Past Affairs`; others become decisions for the player and can affect influence, prestige, cash, relationships, favors, rivalries, or revenue.
 
-Roman Society does not use `setCurrentCharacter` and does not take control away from the human player. NPC houses are simulated by the mod as separate virtual players, marked internally as `cor_society_ai`.
+Roman Society does not use `setCurrentCharacter` and does not take control away from the human player. Vanilla family screens are opened by setting the game's `selectedCharacterId`, which selects the tree being viewed without changing the current playable character. NPC houses are simulated by the mod as separate virtual players, marked internally as `cor_society_ai`.

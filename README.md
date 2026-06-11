@@ -37,6 +37,7 @@ A translation helper mod that learns visible English text while online, saves tr
 - Splits long notification text into smaller cached chunks for first-time translation and offline reuse
 - Translates interaction modal payloads before display, including option text and long-press tooltips
 - Reuses cached fragments for dynamic labels and consequence lines so repeated mod menus do not need to relearn every numeric variant
+- Respects a mod opt-out flag for immediate pretranslation so responsive mod menus can still be translated from cache without waiting on network calls
 - Allows exporting and importing translation cache JSON
 
 **Important Limitation:**
@@ -52,8 +53,8 @@ A social simulation layer inspired by court and dynasty politics. It uses existi
 - Seeds generated houses with real game characters at startup, including visible family members, spouse links, and children where age makes sense
 - Uses social-order icons, separate Allies/Patrons and Rivals menus, and paged Past Affairs displayed as individual notification-style entries
 - Lets the player inspect houses and every known living dynasty member through Notables, Established members, and Common kin, with vanilla character portraits, generated fallback portraits, and generated Roman-style house shields
-- Adds character family navigation through vanilla known-family/full-tree route attempts plus a Society fallback tree using real parent, spouse, child, and sibling IDs
-- Exposes vanilla character actions from the base game when a character currently has them
+- Adds character family navigation through the game's selected-character family-tree routes plus a Society fallback tree using real parent, spouse, child, and sibling IDs
+- Exposes vanilla / other mod character actions when a character currently has them
 - Generated Society characters receive vanilla Citizen of Rome traits through the game's trait API
 - Lets the player arrange marriages between their family and NPC houses through the vanilla marriage API, including the current player character when unmarried, without faking spouse links if the vanilla API rejects a wedding
 - Marriage actions show a short unavailable reason in parentheses and affect prestige, influence, revenue, cash, relations, and favors according to social rank

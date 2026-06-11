@@ -21,14 +21,14 @@
   },
   methods: {
     boot() {
-      if (window.corTranslator && window.corTranslator.version === '1.0.3') {
+      if (window.corTranslator && window.corTranslator.version === '1.0.4') {
         window.corTranslator.ensureRunning()
         window.corTranslator.showInstallNoticeOnce()
         return
       }
 
       window.corTranslator = {
-        version: '1.0.3',
+        version: '1.0.4',
         event: '/cor_translator/main',
         storagePrefix: 'corTranslator.v1.',
         configFlag: 'corTranslatorConfig',
@@ -398,6 +398,9 @@
         },
         shouldPretranslateModalPayload(payload) {
           if (!payload || !this.config || this.config.pretranslateModals === false || !this.canFetchTranslations()) {
+            return false
+          }
+          if (payload.corTranslatorSkipPretranslate || payload.skipTranslatorPretranslate) {
             return false
           }
           let texts = this.collectModalTexts(payload)
