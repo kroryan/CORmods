@@ -63,14 +63,14 @@
   },
   methods: {
     boot() {
-      if (window.corSociety && window.corSociety.version === '1.1.2') {
+      if (window.corSociety && window.corSociety.version === '1.1.4') {
         window.corSociety.ensure()
         window.corSociety.startPlayerCrestOverlay()
         return
       }
 
       window.corSociety = {
-        version: '1.1.2',
+        version: '1.1.4',
         event: '/cor_society/engine',
         flag: 'corSocietyState',
         noticeFlag: 'corSocietyInstallNoticeSeen',
@@ -267,6 +267,48 @@
         save(society) {
           daapi.setGlobalFlag({ flag: this.flag, data: society })
         },
+        assetIcon(name) {
+          try {
+            return daapi.requireImage('/cor_society/assets/' + name + '.svg')
+          } catch (err) {
+            console.warn(err)
+            return daapi.requireImage('/cor_society/icon.svg')
+          }
+        },
+        stratumIcon(stratum) {
+          let icons = {
+            senatorial: 'senate',
+            equestrian: 'eques',
+            civic: 'senator',
+            plebeian: 'plebeian',
+            freedmen: 'freedmen',
+            poor: 'poor'
+          }
+          return this.assetIcon(icons[stratum] || 'familyTree')
+        },
+        affairIcon(kind) {
+          let icons = {
+            officeCampaign: 'senator',
+            tradeVenture: 'trade',
+            marriageAlliance: 'wedding',
+            inheritanceDispute: 'familyTree',
+            feud: 'influence',
+            scandal: 'prestige',
+            slander: 'influence',
+            petition: 'plebeian',
+            invitation: 'familyTree',
+            support: 'influence',
+            marriage: 'marriage',
+            gift: 'coins',
+            coins: 'coins',
+            prestige: 'prestige',
+            trade: 'trade',
+            patronage: 'prestige',
+            rivalry: 'influence',
+            log: 'familyTree'
+          }
+          return this.assetIcon(icons[kind] || 'familyTree')
+        },
         pushModal(payload) {
           payload = payload || {}
           payload.options = this.decorateModalOptions(payload.options || [], payload)
@@ -313,8 +355,11 @@
           let state = daapi.getState()
           let profile = house ? (this.strata[house.stratum] || this.strata.plebeian) : this.strata.plebeian
           if (method === 'openEstate') return 'Consequences: opens that social order; no stats change.'
-          if (method === 'openRelations') return 'Consequences: opens allies and rivals; no stats change.'
+          if (method === 'openRelations') return 'Consequences: opens allies and patrons; no stats change.'
+          if (method === 'openAllies') return 'Consequences: opens allies and patrons; no stats change.'
+          if (method === 'openRivals') return 'Consequences: opens rival houses; no stats change.'
           if (method === 'openLog') return 'Consequences: opens recent affairs; no stats change.'
+          if (method === 'openLogEntry') return 'Consequences: opens this affair notice; no stats change.'
           if (method === 'openHub') return 'Consequences: returns to the Society overview; no stats change.'
           if (method === 'openHouse') return 'Consequences: opens the selected house; no stats change.'
           if (method === 'openPeople') return 'Consequences: opens notable people; no stats change.'
@@ -1189,7 +1234,7 @@
         eventFamilyAffair(society, house) {
           let event = house.pendingPlayerEvent
           let state = daapi.getState()
-          let image = this.houseCrestIcon(society, house)
+          let image = this.affairIcon(event)
           this.save(society)
           if (event === 'officeCampaign') {
             this.pushModal({
@@ -1333,7 +1378,7 @@
           this.pushModal({
             title: house.name + ' spreads a rumor',
             message: 'Your rivals in ' + house.name + ' are whispering that your household has overreached its station. The rumor is small now, but it has teeth.',
-            image: this.houseCrestIcon(society, house),
+            image: this.affairIcon('slander'),
             options: [
               {
                 variant: 'warning',
@@ -1363,7 +1408,7 @@
           this.pushModal({
             title: house.name + ' offers an opening',
             message: 'A friendly contact from ' + house.name + ' suggests a public exchange of support. It would strengthen your network, though it may bind you to their interests.',
-            image: this.houseCrestIcon(society, house),
+            image: this.affairIcon('support'),
             options: [
               {
                 variant: 'info',
@@ -1391,7 +1436,7 @@
           this.pushModal({
             title: 'Petition from ' + house.name,
             message: 'A lesser family connected to ' + house.name + ' asks for your help in a local dispute. It is not glamorous politics, but gratitude from the lower orders can travel far.',
-            image: this.houseCrestIcon(society, house),
+            image: this.affairIcon('petition'),
             options: [
               {
                 variant: 'info',
@@ -1419,7 +1464,7 @@
           this.pushModal({
             title: 'Invitation from ' + house.name,
             message: house.name + ' invites your household to a public family occasion. Attending would cost time and gifts, but the city notices who stands beside whom.',
-            image: this.houseCrestIcon(society, house),
+            image: this.affairIcon('invitation'),
             options: [
               {
                 variant: 'info',
@@ -1464,6 +1509,7 @@
               ...this.stratumOrder.map((stratum) => {
                 return {
                   text: this.strata[stratum].title + ' (' + (counts[stratum] || 0) + ')',
+                  icons: [this.stratumIcon(stratum)],
                   action: {
                     event: this.event,
                     method: 'openEstate',
@@ -1472,14 +1518,24 @@
                 }
               }),
               {
-                text: 'Allies and rivals',
+                text: 'Allies and patrons (' + allies + ')',
+                icons: [this.affairIcon('support')],
                 action: {
                   event: this.event,
-                  method: 'openRelations'
+                  method: 'openAllies'
+                }
+              },
+              {
+                text: 'Rivals (' + rivals + ')',
+                icons: [this.affairIcon('rivalry')],
+                action: {
+                  event: this.event,
+                  method: 'openRivals'
                 }
               },
               {
                 text: 'Recent affairs',
+                icons: [this.affairIcon('log')],
                 action: {
                   event: this.event,
                   method: 'openLog'
@@ -1541,14 +1597,17 @@
           this.pushModal({
             title: this.strata[stratum].title,
             message: shown.length ? 'Choose a house to inspect.' : 'No houses are known in this order yet.',
-            image: daapi.requireImage('/cor_society/icon.svg'),
+            image: this.stratumIcon(stratum),
             options
           })
         },
         openRelations() {
+          this.openAllies()
+        },
+        openAllies() {
           let society = this.ensure()
           let state = daapi.getState()
-          let houses = this.sortedHouses(society).filter((house) => house.relation >= 45 || house.relation <= -35 || house.favor > 0 || house.rivalry)
+          let houses = this.sortedHouses(society).filter((house) => house.relation >= 45 || house.favor > 0)
           let options = houses.slice(0, 10).map((house) => {
             return {
               text: this.houseOptionText(house),
@@ -1569,24 +1628,84 @@
             }
           })
           this.pushModal({
-            title: 'Allies and Rivals',
-            message: houses.length ? 'These houses matter most to your current political life.' : 'No strong relationships or rivalries yet.',
-            image: daapi.requireImage('/cor_society/icon.svg'),
+            title: 'Allies and Patrons',
+            message: houses.length ? 'These houses currently support, favor, or owe your household.' : 'No allies, patrons, or favors yet.',
+            image: this.affairIcon('support'),
+            options
+          })
+        },
+        openRivals() {
+          let society = this.ensure()
+          let state = daapi.getState()
+          let houses = this.sortedHouses(society).filter((house) => house.relation <= -35 || house.rivalry)
+          let options = houses.slice(0, 10).map((house) => {
+            return {
+              text: this.houseOptionText(house),
+              tooltip: this.houseTooltip(house),
+              icons: [this.houseCrestIcon(society, house), this.housePortrait(house, state)],
+              action: {
+                event: this.event,
+                method: 'openHouse',
+                context: { houseId: house.id }
+              }
+            }
+          })
+          options.push({
+            text: 'Back',
+            action: {
+              event: this.event,
+              method: 'openHub'
+            }
+          })
+          this.pushModal({
+            title: 'Rival Houses',
+            message: houses.length ? 'These houses oppose, resent, or openly rival your household.' : 'No serious rivalries yet.',
+            image: this.affairIcon('rivalry'),
             options
           })
         },
         openLog() {
           let society = this.ensure()
+          let entries = (society.log || []).map((entry, index) => this.normalizeLogEntry(entry, index))
+          let options = entries.slice(0, this.logLimit).map((entry) => {
+            return {
+              text: this.shortText(entry.text, 68),
+              tooltip: entry.text,
+              icons: [this.affairIcon(entry.kind)],
+              action: {
+                event: this.event,
+                method: 'openLogEntry',
+                context: { index: entry.index }
+              }
+            }
+          })
+          options.push({
+            text: 'Back',
+            action: {
+              event: this.event,
+              method: 'openHub'
+            }
+          })
           this.pushModal({
             title: 'Recent Affairs',
-            message: (society.log || []).length ? society.log.join('\n') : 'No public affairs recorded yet.',
-            image: daapi.requireImage('/cor_society/icon.svg'),
+            message: entries.length ? 'Choose an affair to inspect.' : 'No public affairs recorded yet.',
+            image: this.affairIcon('log'),
+            options
+          })
+        },
+        openLogEntry({ index }) {
+          let society = this.ensure()
+          let entry = this.normalizeLogEntry((society.log || [])[index], index)
+          this.pushModal({
+            title: 'Society Affair',
+            message: entry.text || 'No details.',
+            image: this.affairIcon(entry.kind),
             options: [
               {
                 text: 'Back',
                 action: {
                   event: this.event,
-                  method: 'openHub'
+                  method: 'openLog'
                 }
               }
             ]
@@ -1721,6 +1840,7 @@
               {
                 variant: 'info',
                 text: 'Notable people',
+                icons: [this.affairIcon('log')],
                 action: {
                   event: this.event,
                   method: 'openPeople',
@@ -1733,6 +1853,7 @@
                 disabled: !marriageInfo.available,
                 showDisabledWithTooltip: true,
                 tooltip: marriageInfo.tooltip,
+                icons: [this.affairIcon('marriage')],
                 action: {
                   event: this.event,
                   method: 'openMarriageHousehold',
@@ -1744,6 +1865,7 @@
                 disabled: cash < giftCost,
                 showDisabledWithTooltip: true,
                 tooltip: 'Spend cash to improve relations and possibly earn a favor.',
+                icons: [this.affairIcon('gift')],
                 action: {
                   event: this.event,
                   method: 'sendGift',
@@ -1755,6 +1877,7 @@
                 disabled: cash < dinnerCost,
                 showDisabledWithTooltip: true,
                 tooltip: 'A wider social gesture. Improves relations and prestige.',
+                icons: [this.affairIcon('prestige')],
                 action: {
                   event: this.event,
                   method: 'hostDinner',
@@ -1767,6 +1890,7 @@
                 disabled: !canAsk,
                 showDisabledWithTooltip: true,
                 tooltip: 'Requires a favor or a warm relationship. Grants influence.',
+                icons: [this.affairIcon('support')],
                 action: {
                   event: this.event,
                   method: 'askSupport',
@@ -1778,6 +1902,7 @@
                 disabled: (house.relation || 0) < 5,
                 showDisabledWithTooltip: true,
                 tooltip: 'Build a temporary revenue tie with this house.',
+                icons: [this.affairIcon('tradeVenture')],
                 action: {
                   event: this.event,
                   method: 'tradeDeal',
@@ -1788,6 +1913,7 @@
               {
                 variant: house.rivalry ? 'info' : 'danger',
                 text: house.rivalry ? 'Seek reconciliation' : 'Declare rivalry',
+                icons: [this.affairIcon(house.rivalry ? 'support' : 'rivalry')],
                 action: {
                   event: this.event,
                   method: house.rivalry ? 'reconcile' : 'startRivalry',
@@ -1863,6 +1989,7 @@
             options: [
               {
                 text: 'Praise in public',
+                icons: [this.affairIcon('prestige')],
                 action: {
                   event: this.event,
                   method: 'praisePerson',
@@ -1875,6 +2002,7 @@
                 disabled: (house.relation || 0) < 10,
                 showDisabledWithTooltip: true,
                 tooltip: 'Warm relations let this person introduce you to useful contacts.',
+                icons: [this.affairIcon('support')],
                 action: {
                   event: this.event,
                   method: 'requestIntroduction',
@@ -1884,6 +2012,7 @@
               {
                 variant: 'danger',
                 text: 'Spread rumor',
+                icons: [this.affairIcon('rivalry')],
                 action: {
                   event: this.event,
                   method: 'spreadRumor',
@@ -2082,12 +2211,62 @@
             this.openHouse({ houseId })
             return
           }
+          playerCharacter.id = playerCharacter.id || playerCharacterId
+          spouse.id = spouse.id || spouseId
+          if (!this.isMarriageEligible(playerCharacter, state) || !this.isMarriageEligible(spouse, state) || !this.isMarriageCompatible(playerCharacter, spouse)) {
+            this.pushModal({
+              title: 'Marriage no longer valid',
+              message: 'The selected marriage is no longer available. One character may already be married, too young, too old, dead, blocked from marriage, from the same dynasty, or incompatible.',
+              image: this.affairIcon('marriage'),
+              options: [
+                {
+                  text: 'Choose again',
+                  action: {
+                    event: this.event,
+                    method: 'openMarriageHousehold',
+                    context: { houseId }
+                  }
+                },
+                {
+                  text: 'Back to house',
+                  action: {
+                    event: this.event,
+                    method: 'openHouse',
+                    context: { houseId }
+                  }
+                }
+              ]
+            })
+            return
+          }
           try {
             daapi.performMarriage({ characterId: playerCharacterId, spouseId, isMatrilineal: !!isMatrilineal })
           } catch (err) {
             console.warn(err)
-            daapi.updateCharacter({ characterId: playerCharacterId, character: { spouseId } })
-            daapi.updateCharacter({ characterId: spouseId, character: { spouseId: playerCharacterId } })
+            this.pushModal({
+              title: 'Marriage failed',
+              message: 'The vanilla marriage API rejected this wedding: ' + err.name + ': ' + err.message + '\nNo Society marriage effects were applied.',
+              image: this.affairIcon('marriage'),
+              options: [
+                {
+                  text: 'Choose again',
+                  action: {
+                    event: this.event,
+                    method: 'openMarriageHousehold',
+                    context: { houseId }
+                  }
+                },
+                {
+                  text: 'Back to house',
+                  action: {
+                    event: this.event,
+                    method: 'openHouse',
+                    context: { houseId }
+                  }
+                }
+              ]
+            })
+            return
           }
           try {
             daapi.forceUpdateCharacterDisplay({ characterId: playerCharacterId })
@@ -2095,6 +2274,9 @@
           } catch (err) {
             console.warn(err)
           }
+          state = daapi.getState()
+          playerCharacter = (state.characters && state.characters[playerCharacterId]) || playerCharacter
+          spouse = (state.characters && state.characters[spouseId]) || spouse
           let effects = this.marriageEffects(state, house)
           this.applyStats(effects.stats)
           if (effects.revenue) {
@@ -2112,7 +2294,7 @@
           house.relation = this.clamp((house.relation || 0) + effects.relation, -100, 100)
           house.favor = (house.favor || 0) + 1
           house.lastFamilyEvent = 'Marriage alliance with your household.'
-          this.log(society, 'A marriage joins your household with ' + house.name + ': ' + this.characterName(playerCharacter, state) + ' and ' + this.characterName(spouse, state) + '.')
+          this.log(society, 'A marriage joins your household with ' + house.name + ': ' + this.characterName(playerCharacter, state) + ' and ' + this.characterName(spouse, state) + '.', 'marriage', house.id)
           this.save(society)
           this.pushModal({
             title: 'Marriage arranged',
@@ -2139,6 +2321,7 @@
             return {
               text: 'Offer patronage',
               tooltip: 'Costs monthly revenue for a year, but builds loyalty and favor among lower orders.',
+              icons: [this.affairIcon('patronage')],
               action: {
                 event: this.event,
                 method: 'offerPatronage',
@@ -2151,6 +2334,7 @@
             disabled: (house.relation || 0) < 20,
             showDisabledWithTooltip: true,
             tooltip: 'Powerful houses may lend standing when relations are good.',
+            icons: [this.affairIcon('patronage')],
             action: {
               event: this.event,
               method: 'seekPatronage',
@@ -2651,6 +2835,9 @@
             if (!this.isMarriageEligible(character, state)) {
               return
             }
+            if (character.id === undefined || character.id === null) {
+              character.id = characterId
+            }
             if (matchCharacter && !this.isMarriageCompatible(matchCharacter, character)) {
               return
             }
@@ -3084,7 +3271,6 @@
           let facialHair = 'none'
           let faceShape = this.pickByRandom(['round', 'oval', 'long', 'square'], random)
           let expression = this.pickByRandom(['calm', 'stern', 'soft', 'proud'], random)
-          let name = this.escapeSvg(character.praenomen || '?').slice(0, 9)
           let svg = ''
           svg += '<svg xmlns="http://www.w3.org/2000/svg" width="144" height="168" viewBox="0 0 144 168">'
           svg += '<defs><linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f7f5f2"/><stop offset="1" stop-color="#ded2bd"/></linearGradient><clipPath id="round"><rect x="8" y="8" width="128" height="152" rx="18"/></clipPath></defs>'
@@ -3092,9 +3278,9 @@
           svg += '<g clip-path="url(#round)">'
           svg += this.portraitBackgroundSvg(role, random)
           if (ageStage === 'baby') {
-            svg += this.generatedBabyPortraitSvg(palette, hair, name)
+            svg += this.generatedBabyPortraitSvg(palette, hair)
             svg += '</g><rect x="10" y="10" width="124" height="148" rx="16" fill="none" stroke="#e8d8b8" stroke-width="4"/>'
-            svg += '<text x="72" y="150" text-anchor="middle" font-family="serif" font-size="13" font-weight="700" fill="#2d2522">' + name + '</text></svg>'
+            svg += '</svg>'
             return this.svgDataUri(svg)
           }
           svg += '<path d="M0 138 C24 112 44 105 72 105 C101 105 120 113 144 138 V170 H0 Z" fill="' + palette.shadow + '"/>'
@@ -3113,7 +3299,6 @@
           }
           svg += '</g>'
           svg += '<rect x="10" y="10" width="124" height="148" rx="16" fill="none" stroke="#e8d8b8" stroke-width="4"/>'
-          svg += '<text x="72" y="150" text-anchor="middle" font-family="serif" font-size="13" font-weight="700" fill="#2d2522">' + name + '</text>'
           svg += '</svg>'
           return this.svgDataUri(svg)
         },
@@ -3153,10 +3338,10 @@
         },
         hairOptions(gender, ageStage, role) {
           if (ageStage === 'baby') return ['tuft', 'soft', 'none']
-          if (ageStage === 'teen') return gender === 'female' ? ['bob', 'waves', 'braids', 'bun'] : ['short', 'curly', 'waves', 'capCut']
-          if (gender === 'female') return ['bun', 'veil', 'waves', 'braids', 'bob', 'diademHair']
-          if (role === 'martial') return ['short', 'capCut', 'curly']
-          return ['short', 'curly', 'waves', 'bald', 'capCut']
+          if (ageStage === 'teen') return gender === 'female' ? ['bob', 'waves', 'braids', 'bun', 'coiled'] : ['short', 'curly', 'waves', 'capCut', 'sidePart']
+          if (gender === 'female') return ['bun', 'veil', 'waves', 'braids', 'bob', 'diademHair', 'coiled', 'tutulus', 'matronBraids']
+          if (role === 'martial') return ['short', 'capCut', 'curly', 'caesar', 'sidePart']
+          return ['short', 'curly', 'waves', 'bald', 'capCut', 'caesar', 'sidePart', 'closeCrop']
         },
         clothingOptions(gender, ageStage, role, stratum) {
           if (ageStage === 'teen') return gender === 'female' ? ['childStola', 'palla', 'simpleTunic'] : ['childTunic', 'simpleTunic', 'mantle']
@@ -3197,7 +3382,7 @@
           }
           return svg
         },
-        generatedBabyPortraitSvg(palette, hair, name) {
+        generatedBabyPortraitSvg(palette, hair) {
           let svg = ''
           svg += '<path d="M31 76 C31 45 51 28 72 28 C95 28 113 47 113 77 C113 103 93 122 72 122 C50 122 31 103 31 76 Z" fill="' + palette.skin + '"/>'
           if (hair !== 'none') {
@@ -3265,8 +3450,26 @@
           if (style === 'capCut') {
             return '<path d="M40 60 C39 34 55 24 72 24 C92 24 104 37 104 61 C92 48 54 48 40 60 Z" fill="' + color + '"/><path d="M43 59 C49 66 55 68 62 68" fill="none" stroke="' + color + '" stroke-width="8" stroke-linecap="round"/>'
           }
+          if (style === 'caesar') {
+            return '<path d="M39 58 C39 34 55 24 72 24 C91 24 104 36 105 59 C94 49 51 49 39 58 Z" fill="' + color + '"/><path d="M44 55 L50 62 L57 55 L64 62 L72 55 L80 62 L88 55 L96 62" fill="none" stroke="' + color + '" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>'
+          }
+          if (style === 'sidePart') {
+            return '<path d="M38 62 C37 34 55 22 73 22 C94 22 108 37 106 63 C93 48 77 43 61 47 C51 49 44 55 38 62 Z" fill="' + color + '"/><path d="M69 25 C63 36 55 43 43 49" fill="none" stroke="#f0d7a0" stroke-opacity=".18" stroke-width="4" stroke-linecap="round"/>'
+          }
+          if (style === 'closeCrop') {
+            return '<path d="M42 56 C44 35 57 27 72 27 C89 27 101 37 102 57 C89 49 55 49 42 56 Z" fill="' + color + '" opacity=".88"/><path d="M45 51 C57 45 87 45 99 51" fill="none" stroke="' + color + '" stroke-width="5" stroke-linecap="round" opacity=".7"/>'
+          }
           if (style === 'bun') {
             return '<path d="M38 66 C36 35 54 22 72 22 C94 22 108 39 106 66 C95 49 49 49 38 66 Z" fill="' + color + '"/><circle cx="107" cy="66" r="12" fill="' + color + '"/>'
+          }
+          if (style === 'coiled') {
+            return '<path d="M38 66 C36 35 54 22 72 22 C94 22 108 39 106 66 C95 49 49 49 38 66 Z" fill="' + color + '"/><circle cx="43" cy="70" r="9" fill="' + color + '"/><circle cx="101" cy="70" r="9" fill="' + color + '"/><path d="M49 48 C60 39 84 39 95 48" fill="none" stroke="#f0d7a0" stroke-opacity=".18" stroke-width="4"/>'
+          }
+          if (style === 'tutulus') {
+            return '<path d="M38 65 C36 35 54 22 72 22 C94 22 108 39 106 65 C95 49 49 49 38 65 Z" fill="' + color + '"/><path d="M55 35 C60 19 85 19 90 35 C80 31 65 31 55 35 Z" fill="' + color + '"/><circle cx="72" cy="31" r="12" fill="' + color + '"/>'
+          }
+          if (style === 'matronBraids') {
+            return '<path d="M38 66 C36 35 54 22 72 22 C94 22 108 39 106 66 C95 49 49 49 38 66 Z" fill="' + color + '"/><path d="M45 47 C56 37 88 37 99 47 M43 56 C57 47 87 47 101 56" fill="none" stroke="#f0d7a0" stroke-opacity=".18" stroke-width="4" stroke-linecap="round"/><path d="M42 66 C38 82 40 96 50 109 M102 66 C106 82 104 96 94 109" fill="none" stroke="' + color + '" stroke-width="7" stroke-linecap="round"/>'
           }
           if (style === 'veil') {
             return '<path d="M36 65 C34 34 52 20 72 20 C95 20 110 37 108 66 L104 119 H40 Z" fill="#c9b183"/><path d="M44 62 C49 45 57 36 72 36 C88 36 97 45 101 62 C88 51 57 51 44 62 Z" fill="' + color + '"/>'
@@ -3332,7 +3535,7 @@
           state = state || daapi.getState()
           let ids = this.visibleHousePeople(house, state)
           let character = ids.length ? (state.characters[ids[0]] || false) : false
-          return character ? this.characterPortrait(character, state, house) : daapi.requireImage('/cor_society/icon.svg')
+          return character ? this.characterPortrait(character, state, house) : this.affairIcon('log')
         },
         startPlayerCrestOverlay() {
           if (this.playerCrestOverlayStarted) {
@@ -3461,12 +3664,56 @@
         attrEscape(value) {
           return String(value || '').replace(/\\/g, '\\\\').replace(/"/g, '\\"')
         },
-        log(society, text) {
+        log(society, text, kind, houseId) {
           let state = daapi.getState()
-          let entry = 'Y' + state.year + ' M' + ((state.month || 0) + 1) + ': ' + text
+          let entry = {
+            text: 'Y' + state.year + ' M' + ((state.month || 0) + 1) + ': ' + text,
+            kind: kind || this.inferAffairKind(text),
+            houseId: houseId || '',
+            year: state.year || 0,
+            month: (state.month || 0) + 1
+          }
           society.log = society.log || []
           society.log.unshift(entry)
           society.log = society.log.slice(0, this.logLimit)
+        },
+        normalizeLogEntry(entry, index) {
+          if (entry && typeof entry === 'object') {
+            return {
+              index,
+              text: entry.text || '',
+              kind: entry.kind || this.inferAffairKind(entry.text || ''),
+              houseId: entry.houseId || ''
+            }
+          }
+          let text = String(entry || '')
+          return {
+            index,
+            text,
+            kind: this.inferAffairKind(text),
+            houseId: ''
+          }
+        },
+        inferAffairKind(text) {
+          text = String(text || '').toLowerCase()
+          if (text.indexOf('marriage') >= 0 || text.indexOf('wedding') >= 0) return 'marriage'
+          if (text.indexOf('trade') >= 0 || text.indexOf('venture') >= 0 || text.indexOf('compact') >= 0) return 'tradeVenture'
+          if (text.indexOf('rival') >= 0 || text.indexOf('feud') >= 0 || text.indexOf('rumor') >= 0 || text.indexOf('slander') >= 0) return 'rivalry'
+          if (text.indexOf('petition') >= 0) return 'petition'
+          if (text.indexOf('office') >= 0 || text.indexOf('campaign') >= 0) return 'officeCampaign'
+          if (text.indexOf('scandal') >= 0) return 'scandal'
+          if (text.indexOf('inheritance') >= 0) return 'inheritanceDispute'
+          if (text.indexOf('gift') >= 0) return 'gift'
+          if (text.indexOf('patronage') >= 0 || text.indexOf('favor') >= 0) return 'patronage'
+          return 'log'
+        },
+        shortText(text, maxLength) {
+          text = String(text || '').replace(/\s+/g, ' ').trim()
+          maxLength = maxLength || 64
+          if (text.length <= maxLength) {
+            return text
+          }
+          return text.slice(0, Math.max(8, maxLength - 3)).replace(/\s+\S*$/, '') + '...'
         },
         monthKey(state) {
           return String(state.year || 0) + '-' + String(state.month || 0)
@@ -3531,8 +3778,17 @@
     openRelations() {
       window.corSociety.openRelations()
     },
+    openAllies() {
+      window.corSociety.openAllies()
+    },
+    openRivals() {
+      window.corSociety.openRivals()
+    },
     openLog() {
       window.corSociety.openLog()
+    },
+    openLogEntry(args) {
+      window.corSociety.openLogEntry(args || {})
     },
     openPlayerCrest() {
       window.corSociety.openPlayerCrest()

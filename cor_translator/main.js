@@ -21,14 +21,14 @@
   },
   methods: {
     boot() {
-      if (window.corTranslator && window.corTranslator.version === '1.0.0') {
+      if (window.corTranslator && window.corTranslator.version === '1.0.2') {
         window.corTranslator.ensureRunning()
         window.corTranslator.showInstallNoticeOnce()
         return
       }
 
       window.corTranslator = {
-        version: '1.0.0',
+        version: '1.0.2',
         event: '/cor_translator/main',
         storagePrefix: 'corTranslator.v1.',
         configFlag: 'corTranslatorConfig',
@@ -44,6 +44,8 @@
         saveTimer: false,
         scanRequested: false,
         loadedLanguage: false,
+        modalHooked: false,
+        originalPushInteractionModalQueue: false,
         stats: {
           discovered: 0,
           translated: 0,
@@ -90,6 +92,7 @@
         ensureRunning() {
           this.config = this.loadConfig()
           this.loadDictionary()
+          this.hookModalQueue()
           this.startObserver()
           this.startScanTimer()
           this.scheduleScan(30)
@@ -219,6 +222,152 @@
             }
           }
         },
+        hookModalQueue() {
+          if (!window.daapi || !daapi.pushInteractionModalQueue || daapi.__corTranslatorModalHooked) {
+            return
+          }
+          let translator = this
+          let original = daapi.pushInteractionModalQueue
+          this.originalPushInteractionModalQueue = original
+          daapi.__corTranslatorModalHooked = true
+          daapi.pushInteractionModalQueue = function(payload) {
+            try {
+              if (window.corTranslator) {
+                window.corTranslator.prepareModalPayload(payload)
+              } else {
+                translator.prepareModalPayload(payload)
+              }
+            } catch (err) {
+              translator.noteError('Modal translation hook failed: ' + err.message)
+            }
+            return original.call(this, payload)
+          }
+        },
+        prepareModalPayload(payload) {
+          if (!payload || this.config.mode === 'paused') {
+            return payload
+          }
+          ;['title', 'message', 'tooltip'].forEach((field) => {
+            if (typeof payload[field] === 'string') {
+              payload[field] = this.preparePayloadText(payload[field])
+            }
+          })
+          ;(payload.inputs || []).forEach((input) => {
+            if (!input) return
+            ;['title', 'description', 'placeholder'].forEach((field) => {
+              if (typeof input[field] === 'string') {
+                input[field] = this.preparePayloadText(input[field])
+              }
+            })
+          })
+          ;(payload.dropdowns || []).forEach((dropdown) => {
+            if (!dropdown) return
+            ;['title', 'description'].forEach((field) => {
+              if (typeof dropdown[field] === 'string') {
+                dropdown[field] = this.preparePayloadText(dropdown[field])
+              }
+            })
+            ;(dropdown.options || []).forEach((option) => {
+              if (option && typeof option.label === 'string') {
+                option.label = this.preparePayloadText(option.label)
+              }
+              if (option && typeof option.description === 'string') {
+                option.description = this.preparePayloadText(option.description)
+              }
+            })
+          })
+          this.preparePayloadOptions(payload.options || [])
+          return payload
+        },
+        preparePayloadOptions(options) {
+          ;(options || []).forEach((option) => {
+            if (!option) return
+            ;['text', 'tooltip', 'label', 'description'].forEach((field) => {
+              if (typeof option[field] === 'string') {
+                option[field] = this.preparePayloadText(option[field])
+              }
+            })
+            if (option.options) {
+              this.preparePayloadOptions(option.options)
+            }
+          })
+        },
+        preparePayloadText(text) {
+          if (!this.shouldTranslateRaw(text)) {
+            return text
+          }
+          let translated = this.cachedTranslationForPreservedText(text)
+          this.learnTextForTranslation(text)
+          return translated || text
+        },
+        learnTextForTranslation(text) {
+          let parts = this.splitPreservedTokens(text)
+          if (parts.length > 1) {
+            parts.forEach((part) => {
+              if (!part.preserved) {
+                this.enqueueTextOrSegments(part.text)
+              }
+            })
+          } else {
+            this.enqueueTextOrSegments(text)
+          }
+        },
+        enqueueTextOrSegments(text) {
+          let clean = this.normalizeText(text)
+          if (!this.shouldTranslateRaw(clean)) {
+            return
+          }
+          if (!this.enqueueCompositeSegments(text)) {
+            this.enqueue(clean)
+          }
+        },
+        cachedTranslationForPreservedText(text) {
+          let parts = this.splitPreservedTokens(text)
+          if (parts.length < 2) {
+            return this.cachedTranslationForPlainText(text)
+          }
+          let changed = false
+          let value = parts.map((part) => {
+            if (part.preserved) {
+              return part.text
+            }
+            let translated = this.cachedTranslationForPlainText(part.text)
+            if (translated) {
+              changed = true
+              return translated
+            }
+            return part.text
+          }).join('')
+          return changed ? value : ''
+        },
+        cachedTranslationForPlainText(text) {
+          let key = this.normalizeText(text)
+          if (!this.shouldTranslateRaw(key)) {
+            return ''
+          }
+          if (this.dictionary[key]) {
+            return this.formatTranslation(key, this.dictionary[key])
+          }
+          return this.getCachedCompositeTranslation(text)
+        },
+        splitPreservedTokens(text) {
+          let raw = String(text || '')
+          let tokenPattern = /(\[[a-z]\|[^\]\r\n]+\])/gi
+          let parts = []
+          let last = 0
+          let match
+          while ((match = tokenPattern.exec(raw))) {
+            if (match.index > last) {
+              parts.push({ text: raw.slice(last, match.index), preserved: false })
+            }
+            parts.push({ text: match[0], preserved: true })
+            last = match.index + match[0].length
+          }
+          if (last < raw.length) {
+            parts.push({ text: raw.slice(last), preserved: false })
+          }
+          return parts.length ? parts : [{ text: raw, preserved: false }]
+        },
         startObserver() {
           if (this.observer || !window.MutationObserver || !document.body) {
             return
@@ -271,6 +420,7 @@
             this.saveConfig()
           }
           this.scanTextNodes(document.body)
+          this.scanElementAttributes(document.body)
           this.pumpQueue()
         },
         scanTextNodes(root) {
@@ -296,6 +446,36 @@
             this.processTextNode(node)
             node = walker.nextNode()
           }
+        },
+        scanElementAttributes(root) {
+          if (!root || !root.querySelectorAll) {
+            return
+          }
+          let elements = root.querySelectorAll('[title], [aria-label], [data-original-title], [data-tooltip], [placeholder]')
+          elements.forEach((element) => {
+            if (this.isIgnoredElement(element)) {
+              return
+            }
+            ;['title', 'aria-label', 'data-original-title', 'data-tooltip', 'placeholder'].forEach((attribute) => {
+              let value = element.getAttribute(attribute)
+              if (!this.shouldTranslateRaw(value || '')) {
+                return
+              }
+              let originalKey = '__corTranslatorOriginalAttr_' + attribute
+              let translatedKey = '__corTranslatorTranslatedAttr_' + attribute
+              let original = element[originalKey]
+              if (!original || value !== element[translatedKey]) {
+                original = value
+                element[originalKey] = original
+              }
+              let translated = this.cachedTranslationForPreservedText(original)
+              this.learnTextForTranslation(original)
+              if (translated && value !== translated) {
+                element.setAttribute(attribute, translated)
+                element[translatedKey] = translated
+              }
+            })
+          })
         },
         isIgnoredElement(element) {
           if (!element || !element.tagName) {
@@ -465,7 +645,7 @@
               result.push({ raw: labelMatch[1], leading: '', trailing: '', text: labelMatch[1] })
               result.push({ raw: labelMatch[2] + labelMatch[3], text: '' })
               if (labelMatch[4]) {
-                result.push({ raw: labelMatch[4] + trailing, leading: '', trailing, text: labelMatch[4] })
+                this.appendCompositeTextPieces(result, labelMatch[4], '', trailing)
               } else {
                 result.push({ raw: trailing, text: '' })
               }
@@ -483,6 +663,40 @@
             result.push({ raw: part, leading, trailing, text })
           })
           return result.length > 1 ? result : []
+        },
+        appendCompositeTextPieces(result, rawText, leading, trailing) {
+          let raw = String(rawText || '')
+          if (!raw) {
+            result.push({ raw: (leading || '') + (trailing || ''), text: '' })
+            return
+          }
+          let parts = raw.split(/(,\s*|;\s*)/)
+          parts.forEach((part, index) => {
+            if (!part) {
+              return
+            }
+            if (/^(,\s*|;\s*)$/.test(part)) {
+              result.push({ raw: part, text: '' })
+              return
+            }
+            let outerLeading = index === 0 ? (leading || '') : ''
+            let outerTrailing = index === parts.length - 1 ? (trailing || '') : ''
+            let localLeading = (part.match(/^\s*/) || [''])[0]
+            let localTrailing = (part.match(/\s*$/) || [''])[0]
+            let text = part.slice(localLeading.length, part.length - localTrailing.length)
+            let numericMatch = text.match(/^([+-]?\d+(?:\.\d+)?(?:\s*(?:to|-)\s*[+-]?\d+(?:\.\d+)?)?\s+)([A-Za-z].*)$/)
+            if (numericMatch) {
+              result.push({ raw: outerLeading + localLeading + numericMatch[1], text: '' })
+              result.push({ raw: numericMatch[2] + localTrailing + outerTrailing, leading: '', trailing: localTrailing + outerTrailing, text: numericMatch[2] })
+              return
+            }
+            result.push({
+              raw: outerLeading + part + outerTrailing,
+              leading: outerLeading + localLeading,
+              trailing: localTrailing + outerTrailing,
+              text
+            })
+          })
         },
         normalizeText(text) {
           return (text || '').replace(/\s+/g, ' ').trim()

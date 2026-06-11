@@ -9,7 +9,8 @@ Offline-cache translator mod for Citizen of Rome.
 - Translates visible game text with Google Translate while online.
 - Saves each `English text -> translated text` pair in the browser/game local cache.
 - Reuses the saved cache offline after the text has been learned once.
-- Reuses cached fragments inside multiline and dynamic mod menus, including label/value lines and short parenthesized reasons.
+- Hooks interaction modal payloads before they are shown, so titles, messages, dropdown labels, option text, and long-press tooltips can be learned and replaced more uniformly.
+- Reuses cached fragments inside multiline and dynamic mod menus, including label/value lines, numbered consequence lists, and short parenthesized reasons.
 - Includes 5 minute and 20 minute intensive scan buttons.
 - Can export/import a language cache as JSON.
 

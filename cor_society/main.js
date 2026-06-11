@@ -29,25 +29,6 @@
       }
     })
     try {
-      daapi.addCharacterAction({
-        characterId: daapi.getState().current.id,
-        key: 'cor_society_debug',
-        action: {
-          title: 'Roman Society',
-          tooltip: 'Opens the Society overview. Consequences: no stats change until you choose an action inside.',
-          icon: daapi.requireImage('/cor_society/icon.svg'),
-          isAvailable: true,
-          hideWhenBusy: false,
-          process: {
-            event: '/cor_society/main',
-            method: 'openHub'
-          }
-        }
-      })
-    } catch (actionErr) {
-      console.warn(actionErr)
-    }
-    try {
       daapi.invokeMethod({
         event: '/cor_society/engine',
         method: 'boot'

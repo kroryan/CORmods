@@ -32,6 +32,8 @@ A translation helper mod that learns visible English text while online, saves tr
 - Includes online learning mode, offline-cache-only mode, and paused mode
 - Provides "Learn visible now", "Intensive scan 5 min", and "Intensive scan 20 min" actions
 - Stores translations by language for offline use after they have been learned
+- Translates interaction modal payloads before display, including option text and long-press tooltips
+- Reuses cached fragments for dynamic labels and consequence lines so repeated mod menus do not need to relearn every numeric variant
 - Allows exporting and importing translation cache JSON
 
 **Important Limitation:**
@@ -41,12 +43,13 @@ The mod can only translate text that the game has loaded into the page. Hidden e
 A social simulation layer inspired by court and dynasty politics. It uses existing Citizen of Rome characters and dynasties, generates missing houses across social orders, and gives those houses relationships, agendas, wealth, power, stability, favors, rivalries, and monthly affairs.
 
 **Key Features:**
-- Adds a "Roman Society" global action
+- Adds a "Roman Society" global action without adding a separate character action
 - Adds a separate "House Shield" global action for configuring the player's house shield
 - Groups houses into senatorial, equestrian, civic, plebeian, freedman, and poor orders
+- Uses social-order icons, separate Allies/Patrons and Rivals menus, and recent affairs displayed as individual notification-style entries
 - Lets the player inspect houses, visible members, and notable characters with vanilla character portraits, generated fallback portraits, and generated Roman-style house shields
 - Generated Society characters receive vanilla Citizen of Rome traits through the game's trait API
-- Lets the player arrange marriages between their family and NPC houses through the vanilla marriage API, including the current player character when unmarried
+- Lets the player arrange marriages between their family and NPC houses through the vanilla marriage API, including the current player character when unmarried, without faking spouse links if the vanilla API rejects a wedding
 - Marriage actions show a short unavailable reason in parentheses and affect prestige, influence, revenue, cash, relations, and favors according to social rank
 - All Society buttons, including event options and global actions, provide hold/long-press tooltips explaining the consequences before pressing
 - Supports gifts, dinners, patronage, political support, trade deals, rivalries, reconciliation, praise, introductions, and rumors

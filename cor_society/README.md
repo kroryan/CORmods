@@ -4,7 +4,7 @@ Roman Society adds a living social layer to Citizen of Rome.
 
 ## Features
 
-- Adds a global `Roman Society` action.
+- Adds a global `Roman Society` action and does not add a character action, keeping entry points predictable on Android.
 - Groups houses into social orders using existing game data: dynasty prestige, heritage, jobs, inheritance, Senate links, and living members.
 - Generates missing houses so every social level has families to interact with.
 - Uses vanilla Citizen of Rome portraits for houses and people through `daapi.getCharacterIcon`.
@@ -12,7 +12,10 @@ Roman Society adds a living social layer to Citizen of Rome.
 - Gives generated characters vanilla Citizen of Rome traits through `daapi.addTrait`.
 - Generates persistent Roman-style house shields for the player and every known NPC house.
 - Adds a separate global `House Shield` action for editing the player's shield without cluttering the Society menus.
-- Tracks persistent relationships, favors, rivalries, patronage, trade ties, and recent affairs.
+- Tracks persistent relationships, favors, rivalries, patronage, trade ties, allies, rivals, and recent affairs.
+- Splits allies/patrons and rivals into separate menus.
+- Shows recent affairs as individual notification-style entries with their own event icons.
+- Uses copied vanilla interface icons for social orders and Society actions where the mod API allows local assets.
 - Lets the player interact with houses and notable characters.
 - Lets the player arrange marriages between unmarried adults from their household and NPC houses using the game's marriage API.
 - Includes the current player character as a marriage candidate when they are unmarried, so starts without a spouse and sudden succession cases can still use Society marriages.
@@ -43,7 +46,7 @@ Generated characters are given a real game character ID and a vanilla Roman `loo
 
 Generated traits use vanilla trait keys from the official example mod documentation, such as `senator`, `educated`, `literate`, `honorable`, `ambitious`, `gregarious`, `strong`, and `sly`.
 
-Arranged marriages call `daapi.performMarriage`, so the resulting spouse relationship should appear in the vanilla family UI after the game refreshes. Marrying upward improves prestige and influence but costs more; marrying downward can improve practical support and local ties while costing some elite standing.
+Arranged marriages call `daapi.performMarriage`, so the resulting spouse relationship should appear in the vanilla family UI after the game refreshes. If the vanilla marriage API rejects a wedding, Society does not fake the spouse link by writing `spouseId` manually; it shows an error and applies no Society effects. Marrying upward improves prestige and influence but costs more; marrying downward can improve practical support and local ties while costing some elite standing.
 
 House shields are generated locally as SVG images and saved in the mod state. NPC house shields appear beside family portraits in Society lists. The player shield is configured from the `House Shield` global action and is shown as a small portrait badge when the mod can identify the current player portrait in the UI.
 
