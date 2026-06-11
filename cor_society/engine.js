@@ -5381,12 +5381,20 @@
             return basePortrait
           }
           let role = this.characterPortraitRole(character, ageStage, (house && house.stratum) || this.playerStratum(state))
+          let baseHref = this.imageHref(basePortrait)
           let svg = ''
           svg += '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="512" height="512" viewBox="0 0 512 512">'
-          svg += '<image href="' + this.escapeSvg(basePortrait) + '" xlink:href="' + this.escapeSvg(basePortrait) + '" x="0" y="0" width="512" height="512" preserveAspectRatio="xMidYMid meet"/>'
+          svg += '<image href="' + this.escapeSvg(baseHref) + '" xlink:href="' + this.escapeSvg(baseHref) + '" x="0" y="0" width="512" height="512" preserveAspectRatio="xMidYMid meet"/>'
           svg += this.nativeClothingOverlaySvg(outfit, gender, ageStage, role)
           svg += '</svg>'
           return this.svgDataUri(svg)
+        },
+        imageHref(value) {
+          value = String(value || '')
+          if (/^[A-Za-z0-9+/=]+$/.test(value.slice(0, 160)) && value.length > 120) {
+            return 'data:image/svg+xml;base64,' + value
+          }
+          return value
         },
         nativeClothingOverlaySvg(outfit, gender, ageStage, role) {
           if (ageStage === 'baby') {
