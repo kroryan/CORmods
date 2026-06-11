@@ -2168,6 +2168,13 @@
           ].join('\n')
         },
         characterPortrait(character, state) {
+          let portrait = this.vanillaCharacterPortrait(character, state)
+          if (this.isImageData(portrait)) {
+            return portrait
+          }
+          return this.generatedCharacterPortrait(character, state)
+        },
+        vanillaCharacterPortrait(character, state) {
           try {
             character = character || {}
             let look = character.look || {}
@@ -2181,16 +2188,106 @@
             } else if (age >= 55) {
               ageStage = 'old'
             }
-            return daapi.getCharacterIcon({
+            let portrait = daapi.getCharacterIcon({
               group: look.group || 'roman',
               gender,
               type: look.type || 'brown',
               ageStage
             })
+            if (this.isImageData(portrait)) {
+              return portrait
+            }
           } catch (err) {
             console.warn(err)
-            return daapi.requireImage('/cor_society/icon.svg')
           }
+          return false
+        },
+        isImageData(value) {
+          if (!value || typeof value !== 'string') {
+            return false
+          }
+          return value.indexOf('data:image/') === 0 || value.indexOf('http') === 0 || value.indexOf('blob:') === 0
+        },
+        generatedCharacterPortrait(character, state) {
+          state = state || daapi.getState()
+          character = character || {}
+          let look = character.look || {}
+          let seed = String(character.id || character.praenomen || Math.random()) + '-' + String(character.charHash || '')
+          let random = this.seededRandom(seed)
+          let type = look.type || this.pickByRandom(['brown', 'brown_curly', 'dusky', 'olive', 'tan', 'hazel', 'auburn', 'blonde', 'black'], random)
+          let gender = character.gender || look.gender || (character.isMale ? 'male' : 'female')
+          let age = this.age(character, state)
+          let palette = this.portraitPalette(type)
+          let hair = this.pickByRandom(['short', 'curly', 'waves', 'bald', 'bun', 'veil'], random)
+          if (gender === 'female' && hair === 'bald') {
+            hair = 'bun'
+          }
+          if (age > 58 && random() > 0.45) {
+            palette.hair = '#c7c0ad'
+          }
+          let name = this.escapeSvg(character.praenomen || '?').slice(0, 9)
+          let svg = ''
+          svg += '<svg xmlns="http://www.w3.org/2000/svg" width="144" height="168" viewBox="0 0 144 168">'
+          svg += '<defs><linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#efe3c7"/><stop offset="1" stop-color="#c7a76a"/></linearGradient><clipPath id="round"><rect x="8" y="8" width="128" height="152" rx="18"/></clipPath></defs>'
+          svg += '<rect x="6" y="6" width="132" height="156" rx="20" fill="#231f25"/><rect x="10" y="10" width="124" height="148" rx="16" fill="url(#bg)"/>'
+          svg += '<g clip-path="url(#round)">'
+          svg += '<rect x="10" y="10" width="124" height="148" fill="#d9c18a"/>'
+          svg += '<path d="M0 138 C24 112 44 105 72 105 C101 105 120 113 144 138 V170 H0 Z" fill="' + (gender === 'female' ? '#7c3040' : '#6f5130') + '"/>'
+          svg += '<path d="M45 118 C51 104 93 104 99 118 L108 168 H36 Z" fill="' + palette.tunic + '"/>'
+          svg += '<path d="M53 100 H91 V125 C82 133 62 133 53 125 Z" fill="' + palette.skin + '"/>'
+          svg += '<ellipse cx="72" cy="67" rx="34" ry="43" fill="' + palette.skin + '" stroke="#7c5545" stroke-opacity=".28" stroke-width="2"/>'
+          svg += this.generatedHairSvg(hair, palette.hair)
+          svg += '<ellipse cx="58" cy="69" rx="4" ry="3" fill="#2b2523"/><ellipse cx="86" cy="69" rx="4" ry="3" fill="#2b2523"/>'
+          svg += '<path d="M68 75 C66 83 66 88 73 88" fill="none" stroke="#7c5545" stroke-width="3" stroke-linecap="round"/>'
+          svg += '<path d="M58 96 C66 103 80 103 88 96" fill="none" stroke="#7c3d34" stroke-width="3" stroke-linecap="round"/>'
+          svg += '<path d="M47 61 C53 56 62 56 67 60 M77 60 C83 56 92 56 97 61" fill="none" stroke="' + palette.hair + '" stroke-width="4" stroke-linecap="round"/>'
+          if (age >= 55) {
+            svg += '<path d="M48 82 C55 86 61 86 66 82 M78 82 C84 86 91 86 96 82 M53 104 C65 110 79 110 91 104" fill="none" stroke="#8d7567" stroke-opacity=".45" stroke-width="2" stroke-linecap="round"/>'
+          }
+          svg += '</g>'
+          svg += '<rect x="10" y="10" width="124" height="148" rx="16" fill="none" stroke="#d6aa3c" stroke-width="4"/>'
+          svg += '<text x="72" y="150" text-anchor="middle" font-family="serif" font-size="13" font-weight="700" fill="#2d2522">' + name + '</text>'
+          svg += '</svg>'
+          return this.svgDataUri(svg)
+        },
+        portraitPalette(type) {
+          let palettes = {
+            black: { skin: '#6e4a36', hair: '#211716', tunic: '#42536b' },
+            brown: { skin: '#b9825b', hair: '#3b2418', tunic: '#6f5130' },
+            brown_curly: { skin: '#bd8a62', hair: '#322015', tunic: '#6b3f24' },
+            dusky: { skin: '#8a5c43', hair: '#211615', tunic: '#355547' },
+            olive: { skin: '#b69065', hair: '#2f251b', tunic: '#5c2d63' },
+            tan: { skin: '#c99666', hair: '#4a2d1b', tunic: '#8f1f22' },
+            hazel: { skin: '#c18a5f', hair: '#68401e', tunic: '#263f73' },
+            auburn: { skin: '#c58d65', hair: '#7b3a1d', tunic: '#7c3040' },
+            blonde: { skin: '#d0a274', hair: '#b7833b', tunic: '#2f5f45' }
+          }
+          return palettes[type] || palettes.brown
+        },
+        generatedHairSvg(style, color) {
+          if (style === 'bald') {
+            return '<path d="M45 54 C50 28 94 28 99 54 C88 43 56 43 45 54 Z" fill="' + color + '" opacity=".45"/>'
+          }
+          if (style === 'curly') {
+            let curls = '<path d="M39 61 C39 30 57 20 72 20 C91 20 105 34 105 62 C95 48 49 48 39 61 Z" fill="' + color + '"/>'
+            for (let i = 0; i < 7; i++) {
+              curls += '<circle cx="' + (44 + i * 9) + '" cy="' + (42 + (i % 2) * 5) + '" r="8" fill="' + color + '"/>'
+            }
+            return curls
+          }
+          if (style === 'waves') {
+            return '<path d="M38 64 C36 35 53 21 72 21 C94 21 108 38 105 65 C96 49 84 43 69 44 C55 44 45 51 38 64 Z" fill="' + color + '"/><path d="M43 43 C55 33 70 37 82 29 C89 37 97 42 102 55" fill="none" stroke="#f0d7a0" stroke-opacity=".18" stroke-width="4"/>'
+          }
+          if (style === 'bun') {
+            return '<path d="M38 66 C36 35 54 22 72 22 C94 22 108 39 106 66 C95 49 49 49 38 66 Z" fill="' + color + '"/><circle cx="107" cy="66" r="12" fill="' + color + '"/>'
+          }
+          if (style === 'veil') {
+            return '<path d="M36 65 C34 34 52 20 72 20 C95 20 110 37 108 66 L104 119 H40 Z" fill="#c9b183"/><path d="M44 62 C49 45 57 36 72 36 C88 36 97 45 101 62 C88 51 57 51 44 62 Z" fill="' + color + '"/>'
+          }
+          return '<path d="M39 62 C38 35 55 23 72 23 C93 23 105 37 105 63 C94 47 51 47 39 62 Z" fill="' + color + '"/>'
+        },
+        pickByRandom(list, random) {
+          return list[Math.floor(random() * list.length) % list.length]
         },
         visibleHousePeople(house, state) {
           let seen = {}
@@ -2273,8 +2370,8 @@
           }
           let size = Math.max(24, Math.min(42, Math.round(rect.width * 0.38)))
           badge.src = this.crestIcon(crest, 96)
-          badge.style.left = Math.round(rect.left + rect.width - size * 0.72) + 'px'
-          badge.style.top = Math.round(Math.max(2, rect.top - size * 0.22)) + 'px'
+          badge.style.left = Math.round(Math.max(2, rect.left - size * 0.28)) + 'px'
+          badge.style.top = Math.round(Math.max(2, rect.top - size * 0.62)) + 'px'
           badge.style.width = size + 'px'
           badge.style.height = Math.round(size * 1.15) + 'px'
           badge.style.display = 'block'

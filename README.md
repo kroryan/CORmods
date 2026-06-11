@@ -44,7 +44,7 @@ A social simulation layer inspired by court and dynasty politics. It uses existi
 - Adds a "Roman Society" global action
 - Adds a separate "House Shield" global action for configuring the player's house shield
 - Groups houses into senatorial, equestrian, civic, plebeian, freedman, and poor orders
-- Lets the player inspect houses, visible members, and notable characters with vanilla character portraits and generated Roman-style house shields
+- Lets the player inspect houses, visible members, and notable characters with vanilla character portraits, generated fallback portraits, and generated Roman-style house shields
 - Supports gifts, dinners, patronage, political support, trade deals, rivalries, reconciliation, praise, introductions, and rumors
 - Gives houses their own monthly virtual-player simulation with AI cash, influence, prestige, property, agendas, family events, and inter-house affairs
 - Produces player-facing events such as office campaigns, marriage alliances, inheritance disputes, trade ventures, scandals, petitions, and slander
