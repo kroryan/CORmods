@@ -63,14 +63,14 @@
   },
   methods: {
     boot() {
-      if (window.corSociety && window.corSociety.version === '1.1.7') {
+      if (window.corSociety && window.corSociety.version === '1.1.8') {
         window.corSociety.ensure()
         window.corSociety.startPlayerCrestOverlay()
         return
       }
 
       window.corSociety = {
-        version: '1.1.7',
+        version: '1.1.8',
         event: '/cor_society/engine',
         flag: 'corSocietyState',
         noticeFlag: 'corSocietyInstallNoticeSeen',
@@ -402,7 +402,7 @@
           if (method === 'openVanillaActions') return 'Consequences: opens this character\'s vanilla / other mods actions; no stats change yet.'
           if (method === 'openVanillaKnownFamily') return 'Consequences: opens the vanilla known-family screen if the game route is available; no stats change.'
           if (method === 'openVanillaFullFamilyTree') return 'Consequences: opens the vanilla full-family-tree screen if the game route is available; no stats change.'
-          if (method === 'openFamilyTree') return 'Consequences: opens Society\'s family-tree view; no stats change.'
+          if (method === 'openFamilyTree') return 'Consequences: opens Society\'s graphical family-tree view; no stats change.'
           if (method === 'openMarriageHousehold') return 'Consequences: chooses one of your unmarried adult family members; no stats change yet.'
           if (method === 'openMarriageCandidates') return 'Consequences: chooses possible spouses from this house; no stats change yet.'
           if (method === 'confirmSocietyMarriage') return 'Consequences: opens the final wedding confirmation; no stats change yet.'
@@ -2882,8 +2882,8 @@
                 }
               },
               {
-                text: 'Society tree',
-                tooltip: 'Open Society fallback tree using real spouse, parent, and child IDs.',
+                text: 'Graphical family tree',
+                tooltip: 'Open the Society graphical family tree using real spouse, parent, and child IDs.',
                 icons: [this.affairIcon('familyTree')],
                 action: {
                   event: this.event,
@@ -3115,6 +3115,370 @@
           if (house) {
             this.refreshHouseMemberLists(society, state, house)
           }
+          this.openGraphicalFamilyTree({ society, state, house, houseId, characterId, group, page, mode })
+        },
+        openGraphicalFamilyTree({ society, state, house, houseId, characterId, group, page, mode }) {
+          if (typeof document === 'undefined' || !document.body) {
+            this.openTextFamilyTreeFallback({ society, state, house, houseId, characterId, group, page, mode })
+            return
+          }
+          let character = state.characters[characterId]
+          if (!character) {
+            this.openHouse({ houseId })
+            return
+          }
+          character.id = character.id || characterId
+          this.closeFamilyTreeOverlay()
+          let overlay = document.createElement('div')
+          overlay.id = 'corSocietyFamilyTreeOverlay'
+          overlay.className = 'cor-society-family-tree-overlay'
+          overlay.setAttribute('data-cor-society-ui', 'family-tree')
+
+          let panel = document.createElement('div')
+          panel.className = 'cor-society-family-tree-panel container-main break-word'
+          overlay.appendChild(panel)
+
+          let header = document.createElement('div')
+          header.className = 'cor-society-family-tree-header'
+          panel.appendChild(header)
+
+          let backButton = document.createElement('button')
+          backButton.type = 'button'
+          backButton.className = 'btn btn-sm btn-dark cor-society-tree-toolbar-button'
+          backButton.textContent = 'Back'
+          backButton.title = 'Return to the selected Society character.'
+          backButton.addEventListener('click', () => {
+            this.closeFamilyTreeOverlay()
+            this.openPerson({ houseId, characterId, group, page: page || 0 })
+          })
+          header.appendChild(backButton)
+
+          let heading = document.createElement('div')
+          heading.className = 'cor-society-family-tree-heading'
+          let title = document.createElement('h3')
+          title.textContent = this.familyTreeTitle(mode)
+          heading.appendChild(title)
+          let subtitle = document.createElement('div')
+          subtitle.className = 'cor-society-family-tree-subtitle'
+          subtitle.textContent = this.characterName(character, state)
+          heading.appendChild(subtitle)
+          header.appendChild(heading)
+
+          let closeButton = document.createElement('button')
+          closeButton.type = 'button'
+          closeButton.className = 'btn btn-sm btn-dark cor-society-tree-toolbar-button'
+          closeButton.textContent = 'Close'
+          closeButton.title = 'Close the family tree.'
+          closeButton.addEventListener('click', () => this.closeFamilyTreeOverlay())
+          header.appendChild(closeButton)
+
+          let toolbar = document.createElement('div')
+          toolbar.className = 'cor-society-family-tree-toolbar'
+          panel.appendChild(toolbar)
+
+          let zoomLabel = document.createElement('label')
+          zoomLabel.className = 'cor-society-tree-zoom-label'
+          zoomLabel.textContent = 'Zoom'
+          toolbar.appendChild(zoomLabel)
+
+          let zoomInput = document.createElement('input')
+          zoomInput.type = 'range'
+          zoomInput.min = '0.45'
+          zoomInput.max = '1.25'
+          zoomInput.step = '0.05'
+          zoomInput.value = '0.9'
+          zoomInput.setAttribute('aria-label', 'Zoom level')
+          toolbar.appendChild(zoomInput)
+
+          let focusButton = document.createElement('button')
+          focusButton.type = 'button'
+          focusButton.className = 'btn btn-sm btn-light cor-society-tree-toolbar-button'
+          focusButton.textContent = 'Center'
+          focusButton.title = 'Pan back to the selected character.'
+          toolbar.appendChild(focusButton)
+
+          let canvas = document.createElement('div')
+          canvas.className = 'cor-society-family-tree-canvas'
+          panel.appendChild(canvas)
+
+          let tree = document.createElement('div')
+          tree.id = 'fullFamilyTree'
+          tree.className = 'cor-society-family-tree vue-family-tree'
+          canvas.appendChild(tree)
+
+          let zoomTarget = document.createElement('div')
+          zoomTarget.className = 'cor-society-family-tree-zoom-target'
+          zoomTarget.style.transform = 'scale(' + parseFloat(zoomInput.value) + ')'
+          tree.appendChild(zoomTarget)
+
+          let startId = this.familyTreeStartId(character.id, state, mode)
+          let depthLimit = mode === 'known' ? 2 : 7
+          let branch = this.createFamilyTreeBranch({
+            rootId: startId,
+            focusId: character.id,
+            state,
+            society,
+            fallbackHouse: house,
+            depth: 0,
+            depthLimit,
+            visited: {}
+          })
+          zoomTarget.appendChild(branch)
+
+          let note = document.createElement('div')
+          note.className = 'cor-society-family-tree-note'
+          note.textContent = mode === 'known'
+            ? 'Known family view: parents, siblings, spouse, and near descendants.'
+            : 'Full tree view: the branch starts from the oldest known ancestor Society can resolve.'
+          zoomTarget.appendChild(note)
+
+          let setZoom = () => {
+            zoomTarget.style.transform = 'scale(' + parseFloat(zoomInput.value || 1) + ')'
+          }
+          zoomInput.addEventListener('input', setZoom)
+          zoomInput.addEventListener('change', setZoom)
+
+          let panToFocus = () => {
+            let selected = document.getElementById('familyTreeCharacterBox_' + character.id)
+            if (selected && typeof selected.scrollIntoView === 'function') {
+              selected.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' })
+            }
+          }
+          focusButton.addEventListener('click', panToFocus)
+
+          document.body.appendChild(overlay)
+          setTimeout(panToFocus, 120)
+        },
+        closeFamilyTreeOverlay() {
+          if (typeof document === 'undefined') {
+            return
+          }
+          let overlay = document.getElementById('corSocietyFamilyTreeOverlay')
+          if (overlay && overlay.parentNode) {
+            overlay.parentNode.removeChild(overlay)
+          }
+        },
+        familyTreeTitle(mode) {
+          if (mode === 'known') return 'Known Family Tree'
+          if (mode === 'full') return 'Full Family Tree'
+          return 'Society Family Tree'
+        },
+        familyTreeStartId(characterId, state, mode) {
+          let character = state.characters[characterId]
+          if (!character) {
+            return characterId
+          }
+          character.id = character.id || characterId
+          if (mode === 'known') {
+            if (character.fatherId && state.characters[character.fatherId]) return character.fatherId
+            if (character.motherId && state.characters[character.motherId]) return character.motherId
+            return character.id
+          }
+          return this.familyTreeRootId(character.id, state)
+        },
+        familyTreeRootId(characterId, state) {
+          let current = state.characters[characterId]
+          let guard = 0
+          while (current && guard < 24) {
+            current.id = current.id || characterId
+            let parents = [current.fatherId, current.motherId].filter((id) => id && state.characters[id])
+            if (!parents.length) {
+              break
+            }
+            let sameDynastyParent = parents.find((id) => state.characters[id].dynastyId && state.characters[id].dynastyId === current.dynastyId)
+            let nextId = sameDynastyParent || parents[0]
+            if (!nextId || this.sameCharacterId(nextId, current.id)) {
+              break
+            }
+            current = state.characters[nextId]
+            characterId = nextId
+            guard += 1
+          }
+          return current && current.id ? current.id : characterId
+        },
+        createFamilyTreeBranch({ rootId, focusId, state, society, fallbackHouse, depth, depthLimit, visited }) {
+          let character = state.characters[rootId]
+          let branch = document.createElement('div')
+          branch.className = 'cor-society-tree-family'
+          if (!character) {
+            branch.appendChild(this.createFamilyTreeEmptyCard('Unknown'))
+            return branch
+          }
+          character.id = character.id || rootId
+          let key = String(character.id)
+          let alreadyVisited = visited[key]
+          visited = { ...visited, [key]: true }
+
+          let spouseId = this.treeSpouseId(character, state)
+          let spouse = spouseId && state.characters[spouseId] ? state.characters[spouseId] : false
+          if (spouse) {
+            spouse.id = spouse.id || spouseId
+          }
+          let children = alreadyVisited ? [] : this.treeChildrenIds(character, state)
+          if (depth >= depthLimit) {
+            children = []
+          }
+
+          let couple = document.createElement('div')
+          couple.className = 'cor-society-tree-couple' + (children.length ? ' has-children' : '')
+          couple.appendChild(this.createFamilyTreeCharacterCard(character, state, society, fallbackHouse, this.treeRoleLabel(character, focusId, depth, false), focusId))
+          if (spouse && !this.sameCharacterId(spouse.id, character.id)) {
+            couple.appendChild(this.createFamilyTreeCharacterCard(spouse, state, society, fallbackHouse, this.treeRoleLabel(spouse, focusId, depth, true), focusId))
+          }
+          branch.appendChild(couple)
+
+          if (children.length) {
+            let childrenWrap = document.createElement('div')
+            childrenWrap.className = 'cor-society-tree-children'
+            children.forEach((childId) => {
+              childrenWrap.appendChild(this.createFamilyTreeBranch({
+                rootId: childId,
+                focusId,
+                state,
+                society,
+                fallbackHouse,
+                depth: depth + 1,
+                depthLimit,
+                visited
+              }))
+            })
+            branch.appendChild(childrenWrap)
+          }
+          return branch
+        },
+        createFamilyTreeCharacterCard(character, state, society, fallbackHouse, role, focusId) {
+          let house = this.treeHouseForCharacter(character, society, fallbackHouse)
+          let card = document.createElement('button')
+          card.type = 'button'
+          card.id = 'familyTreeCharacterBox_' + character.id
+          card.className = 'btn btn-sm btn-outline-secondary btn-family-tree-card cor-society-tree-card'
+          if (this.sameCharacterId(character.id, focusId)) {
+            card.className += ' active'
+          }
+          if (character.isDead) {
+            card.className += ' is-dead'
+          }
+          card.title = this.characterTooltip(character, state)
+          card.addEventListener('click', () => {
+            let nextHouseId = character.dynastyId && society.houses[character.dynastyId] ? character.dynastyId : (house && house.id) || ''
+            this.openGraphicalFamilyTree({
+              society,
+              state: daapi.getState(),
+              house: society.houses[nextHouseId] || house || fallbackHouse,
+              houseId: nextHouseId,
+              characterId: character.id,
+              group: '',
+              page: 0,
+              mode: 'full'
+            })
+          })
+
+          let portrait = document.createElement('img')
+          portrait.className = 'img-fluid icon-character-small cor-society-tree-card-portrait'
+          portrait.src = this.characterPortrait(character, state, house)
+          portrait.alt = ''
+          card.appendChild(portrait)
+
+          let text = document.createElement('span')
+          text.className = 'cor-society-tree-card-text'
+          card.appendChild(text)
+
+          let roleEl = document.createElement('span')
+          roleEl.className = 'cor-society-tree-card-role'
+          roleEl.textContent = role
+          text.appendChild(roleEl)
+
+          let nameEl = document.createElement('span')
+          nameEl.className = 'cor-society-tree-card-name'
+          nameEl.textContent = this.characterName(character, state)
+          text.appendChild(nameEl)
+
+          let metaEl = document.createElement('span')
+          metaEl.className = 'cor-society-tree-card-meta'
+          metaEl.textContent = this.treeCharacterMeta(character, state)
+          text.appendChild(metaEl)
+          return card
+        },
+        createFamilyTreeEmptyCard(label) {
+          let card = document.createElement('div')
+          card.className = 'cor-society-tree-card cor-society-tree-empty-card'
+          card.textContent = label
+          return card
+        },
+        treeHouseForCharacter(character, society, fallbackHouse) {
+          if (character && character.dynastyId && society.houses[character.dynastyId]) {
+            return society.houses[character.dynastyId]
+          }
+          return fallbackHouse || false
+        },
+        treeRoleLabel(character, focusId, depth, isSpouse) {
+          if (this.sameCharacterId(character.id, focusId)) return 'Selected'
+          if (isSpouse) return 'Spouse'
+          if (depth === 0) return character.isDead ? 'Ancestor' : 'Root'
+          return character.isDead ? 'Ancestor' : 'Kin'
+        },
+        treeCharacterMeta(character, state) {
+          if (character.isDead) {
+            return 'Died ' + (character.deathYear || 'unknown')
+          }
+          return 'Age ' + this.age(character, state)
+        },
+        treeSpouseId(character, state) {
+          if (character.spouseId && state.characters[character.spouseId]) {
+            return character.spouseId
+          }
+          let children = this.treeChildrenIds(character, state)
+          for (let i = 0; i < children.length; i++) {
+            let child = state.characters[children[i]]
+            if (!child) {
+              continue
+            }
+            if (this.sameCharacterId(child.fatherId, character.id) && child.motherId && state.characters[child.motherId]) {
+              return child.motherId
+            }
+            if (this.sameCharacterId(child.motherId, character.id) && child.fatherId && state.characters[child.fatherId]) {
+              return child.fatherId
+            }
+          }
+          return ''
+        },
+        treeChildrenIds(character, state) {
+          let ids = []
+          let seen = {}
+          let add = (id) => {
+            if (!id || seen[id] || !state.characters[id] || this.sameCharacterId(id, character.id)) {
+              return
+            }
+            seen[id] = true
+            ids.push(id)
+          }
+          ;(character.childrenIds || []).forEach(add)
+          for (let id in state.characters) {
+            if (!state.characters.hasOwnProperty(id)) {
+              continue
+            }
+            let other = state.characters[id]
+            if (!other) {
+              continue
+            }
+            other.id = other.id || id
+            if (this.sameCharacterId(other.fatherId, character.id) || this.sameCharacterId(other.motherId, character.id)) {
+              add(other.id)
+            }
+          }
+          return ids.sort((a, b) => {
+            let first = state.characters[a] || {}
+            let second = state.characters[b] || {}
+            return (first.birthYear || 0) - (second.birthYear || 0)
+          })
+        },
+        openTextFamilyTreeFallback({ society, state, house, houseId, characterId, group, page, mode }) {
+          let character = state.characters[characterId]
+          if (!character) {
+            this.openHouse({ houseId })
+            return
+          }
+          character.id = character.id || characterId
           let relatives = this.familyTreeRelatives(character, state)
           let message = [
             this.characterLink(character.id, state),
@@ -5215,6 +5579,9 @@
     },
     openFamilyTree(args) {
       window.corSociety.openFamilyTree(args || {})
+    },
+    closeFamilyTreeOverlay() {
+      window.corSociety.closeFamilyTreeOverlay()
     },
     openMarriageHousehold(args) {
       window.corSociety.openMarriageHousehold(args || {})

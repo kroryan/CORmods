@@ -19,7 +19,7 @@ Roman Society adds a living social layer to Citizen of Rome.
 - Uses copied vanilla interface icons for social orders and Society actions where the mod API allows local assets.
 - Lets the player inspect every known living dynasty member through Notables, Established members, and Common kin.
 - Lets the player interact with houses and characters, including Society actions plus vanilla / other mod character actions when the game exposes them.
-- Adds character family navigation: Society-generated characters use the Society tree to keep portraits and Back navigation stable; vanilla characters can still use the game's known-family/full-tree routes.
+- Adds character family navigation: Society-generated characters use a graphical Society family tree with portrait cards, spouse links, children branches, zoom, centering, and stable Back navigation; vanilla characters can still use the game's known-family/full-tree routes.
 - Lets the player arrange marriages between unmarried adults from their household and NPC houses using the game's marriage API.
 - Includes the current player character as a marriage candidate when they are unmarried, so starts without a spouse and sudden succession cases can still use Society marriages.
 - Shows short parenthesized reasons when marriage is unavailable, such as no adult, too high, too low, or required relation.
@@ -46,7 +46,7 @@ The mod uses the game's existing characters and dynasties first. Generated house
 
 Generated people are created with the game's own `daapi.generateCharacter` flow. Society gives them real character IDs, vanilla Roman looks, vanilla traits, `flagDoNotCull`, and family links such as `spouseId`, `fatherId`, `motherId`, and `childrenIds` where appropriate. Every Society-generated living person is marked internally and receives dead generated parents if the game did not already give them parents, so trees have a basic root without adding dead people to living member lists.
 
-Generated characters are given a real game character ID and a vanilla Roman `look` (`group: roman`, type, gender), so the game can recognize them as normal characters. Society uses its own generated portrait for those characters to avoid switching visual style inside Society trees; children inherit look type from parents with small variation, and portraits age by stage without changing the underlying look type.
+Generated characters are given a real game character ID and a vanilla Roman `look` (`group: roman`, type, gender), so the game can recognize them as normal characters. Society uses its own generated portrait for those characters inside the graphical Society tree to avoid switching visual style; children inherit look type from parents with small variation, and portraits age by stage without changing the underlying look type.
 
 Generated traits use vanilla trait keys from the official example mod documentation, such as `senator`, `educated`, `literate`, `honorable`, `ambitious`, `gregarious`, `strong`, and `sly`.
 

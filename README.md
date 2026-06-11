@@ -56,7 +56,7 @@ A social simulation layer inspired by court and dynasty politics. It uses existi
 - Prefers young adult generated founders and gives generated people dead parents when missing, so trees have roots while living member lists stay clean
 - Uses social-order icons, separate Allies/Patrons and Rivals menus, and paged Past Affairs displayed as individual notification-style entries
 - Lets the player inspect houses and every known living dynasty member through Notables, Established members, and Common kin, with vanilla portraits for vanilla people, stable Society portraits for generated people, and generated Roman-style house shields
-- Adds character family navigation through Society trees for generated characters and vanilla selected-character family-tree routes for vanilla characters
+- Adds graphical Society family trees for generated characters, with portrait cards, spouse links, child branches, zoom, centering, and stable Back navigation; vanilla characters still use selected-character vanilla family-tree routes where possible
 - Exposes vanilla / other mod character actions when a character currently has them
 - Generated Society characters receive vanilla Citizen of Rome traits through the game's trait API
 - Lets the player arrange marriages between their family and NPC houses through the vanilla marriage API, including the current player character when unmarried, without faking spouse links if the vanilla API rejects a wedding
