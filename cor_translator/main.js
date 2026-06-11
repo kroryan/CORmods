@@ -21,14 +21,14 @@
   },
   methods: {
     boot() {
-      if (window.corTranslator && window.corTranslator.version === '1.0.4') {
+      if (window.corTranslator && window.corTranslator.version === '1.0.5') {
         window.corTranslator.ensureRunning()
         window.corTranslator.showInstallNoticeOnce()
         return
       }
 
       window.corTranslator = {
-        version: '1.0.4',
+        version: '1.0.5',
         event: '/cor_translator/main',
         storagePrefix: 'corTranslator.v1.',
         configFlag: 'corTranslatorConfig',
@@ -57,7 +57,8 @@
           targetLang: 'es',
           mode: 'learn',
           scanIntervalMs: 700,
-          requestDelayMs: 350,
+          requestDelayMs: 175,
+          pretranslateConcurrency: 4,
           intensiveUntil: 0,
           pretranslateModals: true,
           debug: false
@@ -347,11 +348,35 @@
             })
           })
           this.collectOptionPretranslations(payload.options || [], jobs)
-          return jobs.reduce((chain, job) => {
-            return chain.then(() => job())
-          }, Promise.resolve()).then(() => {
+          return this.runJobsWithConcurrency(jobs, this.config.pretranslateConcurrency || 4).then(() => {
             return payload
           })
+        },
+        runJobsWithConcurrency(jobs, concurrency) {
+          jobs = jobs || []
+          if (!jobs.length) {
+            return Promise.resolve()
+          }
+          concurrency = Math.max(1, Math.min(6, parseInt(concurrency || 4, 10)))
+          let index = 0
+          let runNext = () => {
+            if (index >= jobs.length) {
+              return Promise.resolve()
+            }
+            let job = jobs[index]
+            index += 1
+            return Promise.resolve()
+              .then(() => job())
+              .catch((err) => {
+                this.noteError('Pretranslate field failed: ' + err.message)
+              })
+              .then(runNext)
+          }
+          let workers = []
+          for (let i = 0; i < Math.min(concurrency, jobs.length); i++) {
+            workers.push(runNext())
+          }
+          return Promise.all(workers)
         },
         collectOptionPretranslations(options, jobs) {
           ;(options || []).forEach((option) => {
@@ -557,7 +582,7 @@
           if (!this.canFetchTranslations()) {
             return Promise.resolve('')
           }
-          return this.withTimeout(this.translateText(key), 4500).then((translated) => {
+          return this.withTimeout(this.translateText(key), 3500).then((translated) => {
             translated = this.normalizeText(translated)
             if (!translated) {
               return ''
@@ -807,6 +832,9 @@
           if (!clean || clean.length < 2 || clean.length > 5000) {
             return false
           }
+          if (this.looksLikeProperNameOnly(clean)) {
+            return false
+          }
           if (/^https?:\/\//i.test(clean)) {
             return false
           }
@@ -817,6 +845,40 @@
             return false
           }
           return true
+        },
+        looksLikeProperNameOnly(text) {
+          let clean = this.normalizeText(text)
+          let words = clean.split(/\s+/)
+          if (!words.length || words.length > 4) {
+            return false
+          }
+          if (!words.every((word) => /^[A-Z][A-Za-z'’-]{2,}$/.test(word))) {
+            return false
+          }
+          let uiWords = {
+            Roman: true,
+            Society: true,
+            Family: true,
+            Tree: true,
+            Known: true,
+            Full: true,
+            House: true,
+            Shield: true,
+            Allies: true,
+            Patrons: true,
+            Rivals: true,
+            Past: true,
+            Affairs: true,
+            Notables: true,
+            Established: true,
+            Common: true,
+            Marriage: true,
+            Petition: true,
+            Scandal: true,
+            Invitation: true,
+            Consequences: true
+          }
+          return !words.some((word) => uiWords[word])
         },
         processTextNode(node) {
           let originalRaw = this.getOriginalRaw(node)

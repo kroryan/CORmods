@@ -34,9 +34,11 @@ A translation helper mod that learns visible English text while online, saves tr
 - Stores translations by language for offline use after they have been learned
 - Hooks both normal interaction modals and button-style event notifications
 - Pretranslates uncached modal/event text before display while online learning is available
+- Uses limited concurrent pretranslation for event popups so first-time translations do not wait on one request at a time
 - Splits long notification text into smaller cached chunks for first-time translation and offline reuse
 - Translates interaction modal payloads before display, including option text and long-press tooltips
 - Reuses cached fragments for dynamic labels and consequence lines so repeated mod menus do not need to relearn every numeric variant
+- Skips isolated proper names so repeated family events can reuse cached text instead of treating every house name as a new sentence
 - Respects a mod opt-out flag for immediate pretranslation so responsive mod menus can still be translated from cache without waiting on network calls
 - Allows exporting and importing translation cache JSON
 
@@ -51,16 +53,17 @@ A social simulation layer inspired by court and dynasty politics. It uses existi
 - Adds a separate "House Shield" global action for configuring the player's house shield
 - Groups houses into senatorial, equestrian, civic, plebeian, freedman, and poor orders
 - Seeds generated houses with real game characters at startup, including visible family members, spouse links, and children where age makes sense
+- Prefers young adult generated founders and gives generated people dead parents when missing, so trees have roots while living member lists stay clean
 - Uses social-order icons, separate Allies/Patrons and Rivals menus, and paged Past Affairs displayed as individual notification-style entries
-- Lets the player inspect houses and every known living dynasty member through Notables, Established members, and Common kin, with vanilla character portraits, generated fallback portraits, and generated Roman-style house shields
-- Adds character family navigation through the game's selected-character family-tree routes plus a Society fallback tree using real parent, spouse, child, and sibling IDs
+- Lets the player inspect houses and every known living dynasty member through Notables, Established members, and Common kin, with vanilla portraits for vanilla people, stable Society portraits for generated people, and generated Roman-style house shields
+- Adds character family navigation through Society trees for generated characters and vanilla selected-character family-tree routes for vanilla characters
 - Exposes vanilla / other mod character actions when a character currently has them
 - Generated Society characters receive vanilla Citizen of Rome traits through the game's trait API
 - Lets the player arrange marriages between their family and NPC houses through the vanilla marriage API, including the current player character when unmarried, without faking spouse links if the vanilla API rejects a wedding
 - Marriage actions show a short unavailable reason in parentheses and affect prestige, influence, revenue, cash, relations, and favors according to social rank
 - All Society buttons, including event options and global actions, provide hold/long-press tooltips explaining the consequences before pressing
-- Supports gifts, dinners, patronage, political support, trade deals, rivalries, reconciliation, praise, introductions, and rumors
-- Gives houses their own monthly virtual-player simulation with AI cash, influence, prestige, property, agendas, family events, inter-house marriages, pregnancies, and inter-house affairs
+- Supports gifts, dinners, patronage, political support, trade deals, rivalries, reconciliation, praise, introductions, rumors, and trade ventures that settle after one or two months
+- Gives houses their own monthly virtual-player simulation with AI cash, influence, prestige, property, agendas, family events, inter-house marriages, pregnancies, inter-house affairs, and social rise/fall
 - Lets large vanilla changes to the player's cash, influence, or prestige shift Society relations, so base-game events can affect the social map too
 - Produces player-facing events such as office campaigns, marriage alliances, inheritance disputes, trade ventures, scandals, petitions, and slander
-- Applies real effects through cash, prestige, influence, favors, relations, rival pressure, and revenue modifiers
+- Applies real effects through cash, prestige, influence, favors, relations, and revenue modifiers without a permanent monthly rival-pressure penalty
