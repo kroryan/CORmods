@@ -63,14 +63,15 @@
   },
   methods: {
     boot() {
-      if (window.corSociety && window.corSociety.version === '1.1.8') {
+      if (window.corSociety && window.corSociety.version === '1.1.9') {
         window.corSociety.ensure()
         window.corSociety.startPlayerCrestOverlay()
+        window.corSociety.startPlayerStatusOverlay()
         return
       }
 
       window.corSociety = {
-        version: '1.1.8',
+        version: '1.1.9',
         event: '/cor_society/engine',
         flag: 'corSocietyState',
         noticeFlag: 'corSocietyInstallNoticeSeen',
@@ -203,6 +204,7 @@
           state = daapi.getState()
           this.ensureGeneratedLooks(society, state)
           this.ensureCrests(society, state)
+          this.syncPlayerSocietyStatus(society, state)
           society.lastEnsureKey = this.ensureKey(society, state)
           this.save(society)
           return society
@@ -2242,8 +2244,10 @@
           let counts = this.countByStratum(society)
           let rivals = this.sortedHouses(society).filter((house) => house.rivalry || house.relation <= -55).length
           let allies = this.sortedHouses(society).filter((house) => house.relation >= 55 || house.favor >= 2).length
+          let playerStatus = this.playerSocietyStatus(state)
           let message = [
             'Date: Year ' + state.year + ', month ' + ((state.month || 0) + 1),
+            'Your standing: ' + playerStatus.title + (playerStatus.className ? ' (' + playerStatus.className + ')' : '') + '.',
             'Society: ' + Object.keys(society.houses).length + ' known houses across ' + this.stratumOrder.length + ' social orders.',
             'Relations: ' + allies + ' allies/patrons, ' + rivals + ' open rivalries.',
             'House turns: families pursue wealth, office, marriage, security, honor, or revenge each month.',
@@ -4418,46 +4422,95 @@
           return candidates.sort((a, b) => this.characterScore(b, state) - this.characterScore(a, state))
         },
         playerStratum(state) {
+          return this.playerSocietyStatus(state).stratum
+        },
+        syncPlayerSocietyStatus(society, state) {
+          society.playerStatus = this.playerSocietyStatus(state)
+        },
+        playerSocietyStatus(state) {
           state = state || daapi.getState()
-          let player = state.characters[this.currentCharacterId(state)] || {}
-          let dynastyId = player.dynastyId
+          let currentId = this.currentCharacterId(state)
+          let player = (state.characters && state.characters[currentId]) || {}
+          let dynastyId = player.dynastyId || (state.current && state.current.dynastyId)
+          let dynasty = (state.dynasties && state.dynasties[dynastyId]) || {}
           let members = this.playerFamilyMembers(state)
-          let dynasty = state.dynasties[dynastyId] || {}
           let heritage = this.normalizedHeritage(dynasty.heritage || player.heritage || '')
-          let currentClass = this.safeCurrentClass()
+          let currentClass = this.safeCurrentClass(state)
+          let wealth = this.playerWealthValue(state)
           let hasSenate = members.some((character) => this.isSenatorialCharacter(character, state))
-          if (hasSenate) {
+          let stratum = this.stratumFromPlayerClass(currentClass, heritage, hasSenate, state)
+          return {
+            stratum,
+            title: this.playerStatusTitle(stratum, heritage),
+            heritage,
+            currentClass,
+            className: this.currentClassName(currentClass),
+            wealth
+          }
+        },
+        stratumFromPlayerClass(currentClass, heritage, hasSenate, state) {
+          let senatorialFlag = !!(state && state.current && state.current.flagIsSenetorialClass)
+          if (senatorialFlag || hasSenate || currentClass >= 7) {
             return 'senatorial'
           }
-          if (heritage === 'roman_patrician') {
-            return currentClass !== null && currentClass > 2 ? 'equestrian' : 'senatorial'
+          if (currentClass >= 6) {
+            return 'equestrian'
           }
-          if (heritage === 'roman_novus_homo') {
-            return currentClass !== null && currentClass > 2 ? 'civic' : 'equestrian'
+          if (currentClass >= 4) {
+            return 'civic'
           }
-          if (heritage === 'roman_freedman') {
-            return currentClass !== null && currentClass > 5 ? 'poor' : 'freedmen'
-          }
-          if (heritage === 'roman_plebian' || heritage === 'roman_plebeian') {
+          if (currentClass >= 1) {
+            if (heritage === 'roman_freedman') {
+              return 'freedmen'
+            }
+            if (heritage === 'roman_novus_homo' && currentClass >= 3) {
+              return 'civic'
+            }
             return 'plebeian'
           }
-          if (currentClass !== null) {
-            if (currentClass <= 1) return 'equestrian'
-            if (currentClass <= 2) return 'civic'
-            if (currentClass <= 5) return 'plebeian'
-            return 'poor'
+          if (heritage === 'roman_freedman') {
+            return 'freedmen'
           }
-          let strength = 0
-          members.forEach((character) => {
-            strength += this.characterScore(character, state)
-          })
-          strength += Math.round(parseFloat(dynasty.prestige || 0) / 1000)
-          return this.classifyHouse(dynasty, members, strength, false)
+          if (heritage === 'roman_novus_homo' && currentClass >= 3) {
+            return 'civic'
+          }
+          return 'poor'
+        },
+        playerStatusTitle(stratum, heritage) {
+          if (stratum === 'senatorial') return 'Senatorial Roman Citizen'
+          if (stratum === 'equestrian') return 'Equestrian Roman Citizen'
+          if (stratum === 'civic') return heritage === 'roman_novus_homo' ? 'Novus Homo Civic Roman Citizen' : 'Civic Roman Citizen'
+          if (stratum === 'plebeian') return heritage === 'roman_novus_homo' ? 'Novus Homo Plebeian Roman Citizen' : 'Plebeian Roman Citizen'
+          if (stratum === 'freedmen') return 'Freedman Roman Citizen'
+          return 'Proletarii Roman Citizen'
+        },
+        playerStatusText(state) {
+          let status = this.playerSocietyStatus(state)
+          let classText = status.className ? ' (' + status.className + ')' : ''
+          return status.title + classText
+        },
+        playerStatusKey(state) {
+          let status = this.playerSocietyStatus(state)
+          return [
+            status.stratum,
+            status.heritage,
+            status.currentClass === null ? 'none' : status.currentClass,
+            status.className || '',
+            !!(state && state.current && state.current.flagIsSenetorialClass)
+          ].join(':')
+        },
+        currentClassName(currentClass) {
+          let names = ['Proletarii', 'Class V', 'Class IV', 'Class III', 'Class II', 'Class I', 'Equites', 'Senatores']
+          return names[currentClass] || ''
         },
         normalizedHeritage(heritage) {
           return String(heritage || '').toLowerCase()
         },
-        safeCurrentClass() {
+        safeCurrentClass(state) {
+          state = state || daapi.getState()
+          if (state && state.current && state.current.flagIsSenetorialClass) {
+            return 7
+          }
           try {
             if (typeof daapi !== 'undefined' && daapi.calculateCurrentClass) {
               let currentClass = parseInt(daapi.calculateCurrentClass(), 10)
@@ -4466,7 +4519,53 @@
           } catch (err) {
             console.warn(err)
           }
-          return null
+          let wealth = this.playerWealthValue(state)
+          if (wealth < 1100) return 0
+          if (wealth < 2500) return 1
+          if (wealth < 5000) return 2
+          if (wealth < 7500) return 3
+          if (wealth < 10000) return 4
+          if (wealth < 25000) return 5
+          return 6
+        },
+        playerWealthValue(state) {
+          let current = (state && state.current) || {}
+          let wealth = parseFloat(current.cash || 0)
+          let details = current.propertyDetails || current.property || {}
+          return wealth + this.propertyValue(details)
+        },
+        propertyValue(details) {
+          let values = {
+            farmland: 250,
+            vinyard: 360,
+            vineyard: 360,
+            orchard: 420,
+            primeFarmland: 2700,
+            primeVinyard: 3300,
+            primeVineyard: 3300,
+            primeOrchard: 3900,
+            latifundiumFood: 11000,
+            latifundiumAnimal: 14000,
+            latifundiumFish: 17000,
+            latifundiumOil: 21000,
+            insulae: 4500,
+            fishingBoat: 41,
+            tradeships: 630,
+            seafaringTradeships: 7500,
+            horse: 125,
+            donkey: 28,
+            pig: 26,
+            goat: 32,
+            sheep: 36,
+            cattle: 40,
+            duck: 15,
+            chicken: 10
+          }
+          let total = 0
+          Object.keys(values).forEach((key) => {
+            total += parseFloat(details[key] || 0) * values[key]
+          })
+          return total
         },
         socialLevel(stratum) {
           let levels = {
@@ -5281,6 +5380,64 @@
           let character = ids.length ? (state.characters[ids[0]] || false) : false
           return character ? this.characterPortrait(character, state, house) : this.affairIcon('log')
         },
+        startPlayerStatusOverlay() {
+          if (this.playerStatusOverlayStarted) {
+            this.applyPlayerStatusOverlay()
+            return
+          }
+          this.playerStatusOverlayStarted = true
+          this.applyPlayerStatusOverlay()
+          if (typeof window !== 'undefined' && window.setInterval) {
+            window.setInterval(() => {
+              try {
+                if (window.corSociety) {
+                  window.corSociety.applyPlayerStatusOverlay()
+                }
+              } catch (err) {
+                console.warn(err)
+              }
+            }, 1400)
+          }
+        },
+        applyPlayerStatusOverlay() {
+          if (typeof document === 'undefined') {
+            return
+          }
+          let state = daapi.getState()
+          let target = this.findPlayerStatusElement()
+          if (!target) {
+            return
+          }
+          let key = this.playerStatusKey(state)
+          if (target.getAttribute('data-cor-society-status-key') === key) {
+            return
+          }
+          let status = this.playerSocietyStatus(state)
+          let text = status.title + (status.className ? ' (' + status.className + ')' : '')
+          if (!target.getAttribute('data-cor-society-original-status')) {
+            target.setAttribute('data-cor-society-original-status', target.textContent || '')
+          }
+          target.setAttribute('data-cor-society-status-key', key)
+          target.setAttribute('title', 'Society order: ' + this.stratumTitle(status.stratum) + (status.className ? '; vanilla property class: ' + status.className : ''))
+          target.textContent = text
+        },
+        findPlayerStatusElement() {
+          let socialSection = document.querySelector('[aria-label="Social status"]')
+          if (socialSection) {
+            let direct = socialSection.querySelector('.h5')
+            if (direct) {
+              return direct
+            }
+          }
+          let dynastyTitle = document.querySelector('.dynasty-title')
+          if (dynastyTitle && dynastyTitle.parentElement) {
+            let candidates = dynastyTitle.parentElement.querySelectorAll('.h5')
+            if (candidates.length) {
+              return candidates[0]
+            }
+          }
+          return false
+        },
         startPlayerCrestOverlay() {
           if (this.playerCrestOverlayStarted) {
             this.applyPlayerCrestOverlay()
@@ -5504,6 +5661,7 @@
 
       window.corSociety.ensure()
       window.corSociety.startPlayerCrestOverlay()
+      window.corSociety.startPlayerStatusOverlay()
     },
     monthlyTick() {
       if (!window.corSociety) {

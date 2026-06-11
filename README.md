@@ -61,6 +61,7 @@ A social simulation layer inspired by court and dynasty politics. It uses existi
 - Generated Society characters receive vanilla Citizen of Rome traits through the game's trait API
 - Lets the player arrange marriages between their family and NPC houses through the vanilla marriage API, including the current player character when unmarried, without faking spouse links if the vanilla API rejects a wedding
 - Marriage actions show a short unavailable reason in parentheses and affect prestige, influence, revenue, cash, relations, and favors according to social rank
+- Reads the player's real vanilla property class, senatorial flag, and heritage to decide Society order and update the visible citizen title on the main game screen without overwriting vanilla heritage
 - All Society buttons, including event options and global actions, provide hold/long-press tooltips explaining the consequences before pressing
 - Supports gifts, dinners, patronage, political support, trade deals, rivalries, reconciliation, praise, introductions, rumors, and trade ventures that settle after one or two months
 - Gives houses their own monthly virtual-player simulation with AI cash, influence, prestige, property, agendas, family events, inter-house marriages, pregnancies, inter-house affairs, and social rise/fall

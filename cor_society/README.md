@@ -25,6 +25,7 @@ Roman Society adds a living social layer to Citizen of Rome.
 - Shows short parenthesized reasons when marriage is unavailable, such as no adult, too high, too low, or required relation.
 - Adds native button tooltips to Society menus and event popups so long-pressing/holding an option shows the expected consequences before confirming it.
 - Restricts marriages by order: one order down, same order, one order up, or two orders up with very high relations.
+- Derives the player's Society order from the base game's property class, senatorial flag, and vanilla heritage, then updates the visible main-screen citizen title without overwriting vanilla `heritage`.
 - Applies real game effects through cash, prestige, influence, revenue modifiers, and monthly events.
 - Lets houses play their own monthly social game through wealth, power, stability, agendas, family events, inter-house marriages, pregnancies, inter-house relationships, and rank movement.
 - Gives each house a separate virtual-player state: AI cash, AI influence, AI prestige, property, focus, and controller marker.
@@ -51,6 +52,8 @@ Generated characters are given a real game character ID and a vanilla Roman `loo
 Generated traits use vanilla trait keys from the official example mod documentation, such as `senator`, `educated`, `literate`, `honorable`, `ambitious`, `gregarious`, `strong`, and `sly`.
 
 Arranged marriages and AI house marriages call `daapi.performMarriage`, so the resulting spouse relationship should appear in the vanilla family UI after the game refreshes. If the vanilla marriage API rejects a wedding, Society does not fake the spouse link by writing `spouseId` manually; it shows an error and applies no Society effects. Marrying upward improves prestige and influence but costs more; marrying downward can improve practical support and local ties while costing some elite standing.
+
+The player's Society order is calculated from the same economic ladder used by the base game: Proletarii, Class V, Class IV, Class III, Class II, Class I, Equites, and Senatores. Novus Homo remains a vanilla heritage value, but Society treats it as a civic-status marker once the household has enough property class to support that rank. The main-screen citizen title is patched visually so it can evolve with Society status while leaving the vanilla data intact for elections and other base-game systems.
 
 AI houses can also attempt pregnancies through `daapi.impregnate`. The base game remains responsible for resolving the birth; Society records the pregnancy and later detects new child IDs when the dynasty updates.
 
