@@ -2,14 +2,6 @@
   canTriggerIfUnavailable: true,
   checkType: 'general',
   checkAndAct() {
-    daapi.invokeMethod({
-      event: '/cor_society/main',
-      method: 'boot'
-    })
-    daapi.invokeMethod({
-      event: '/cor_society/main',
-      method: 'monthlyTick'
-    })
     daapi.addGlobalAction({
       key: 'cor_society',
       action: {
@@ -22,18 +14,51 @@
         }
       }
     })
+    try {
+      daapi.invokeMethod({
+        event: '/cor_society/main',
+        method: 'boot'
+      })
+      daapi.invokeMethod({
+        event: '/cor_society/main',
+        method: 'showInstallNoticeOnce'
+      })
+      daapi.invokeMethod({
+        event: '/cor_society/main',
+        method: 'monthlyTick'
+      })
+    } catch (err) {
+      console.warn(err)
+      try {
+        daapi.setGlobalFlag({
+          flag: 'corSocietyLastError',
+          data: err.name + ': ' + err.message
+        })
+        if (!daapi.getGlobalFlag({ flag: 'corSocietyStartupErrorShown' })) {
+          daapi.setGlobalFlag({ flag: 'corSocietyStartupErrorShown', data: true })
+          daapi.pushInteractionModalQueue({
+            title: 'Roman Society startup error',
+            message: 'The mod button was registered, but startup failed: ' + err.name + ': ' + err.message,
+            image: daapi.requireImage('/cor_society/icon.svg')
+          })
+        }
+      } catch (noticeErr) {
+        console.warn(noticeErr)
+      }
+    }
   },
   methods: {
     boot() {
-      if (window.corSociety && window.corSociety.version === '1.0.0') {
+      if (window.corSociety && window.corSociety.version === '1.0.1') {
         window.corSociety.ensure()
         return
       }
 
       window.corSociety = {
-        version: '1.0.0',
+        version: '1.0.1',
         event: '/cor_society/main',
         flag: 'corSocietyState',
+        noticeFlag: 'corSocietyInstallNoticeSeen',
         logLimit: 18,
         stratumOrder: ['senatorial', 'equestrian', 'civic', 'plebeian', 'freedmen', 'poor'],
         strata: {
@@ -123,6 +148,36 @@
           this.syncWithGame(society, state)
           this.save(society)
           return society
+        },
+        showInstallNoticeOnce() {
+          let seen = false
+          try {
+            seen = !!daapi.getGlobalFlag({ flag: this.noticeFlag })
+          } catch (err) {
+            seen = false
+          }
+          if (seen) {
+            return
+          }
+          daapi.setGlobalFlag({ flag: this.noticeFlag, data: true })
+          daapi.pushInteractionModalQueue({
+            title: 'Roman Society loaded',
+            message: 'Roman Society is active. It adds social orders, houses, virtual-player families, monthly family affairs, alliances, rivalries, patronage, trade, scandals, petitions, and political support.',
+            image: daapi.requireImage('/cor_society/icon.svg'),
+            options: [
+              {
+                variant: 'info',
+                text: 'Open Roman Society',
+                action: {
+                  event: this.event,
+                  method: 'openHub'
+                }
+              },
+              {
+                text: 'Later'
+              }
+            ]
+          })
         },
         createState() {
           return {
@@ -1789,6 +1844,12 @@
         daapi.invokeMethod({ event: '/cor_society/main', method: 'boot' })
       }
       window.corSociety.monthlyTick()
+    },
+    showInstallNoticeOnce() {
+      if (!window.corSociety) {
+        daapi.invokeMethod({ event: '/cor_society/main', method: 'boot' })
+      }
+      window.corSociety.showInstallNoticeOnce()
     },
     openHub() {
       if (!window.corSociety) {
