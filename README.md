@@ -1,4 +1,6 @@
-# Family Inheritance Management Mods
+# Citizen of Rome Mods
+
+This repository contains custom mods for Citizen of Rome: Dynasty Ascendant.
 
 ## Disinheritance Mod
 A mod that allows you to disinherit family members from your household. With this mod, you can remove the inheritance rights of any living character in your family. Using this action will result in a penalty to your prestige (-10) and influence (-20), reflecting the social impact of such a decision.
@@ -19,3 +21,18 @@ A complementary mod that allows you to restore previously disinherited family me
 - Includes a custom icon showing an approved inheritance document with a green checkmark
 
 Both mods integrate seamlessly into the game's interface and provide appropriate visual feedback through their respective icons and confirmation dialogues.
+
+## CoR Translator Mod
+A translation helper mod that learns visible English text while online, saves translations in a local cache, and reuses that cache for offline play. It is designed for players who want to translate the game once over time, then keep playing with the saved translations.
+
+**Key Features:**
+- Adds a "CoR Translator" global action
+- Shows a one-time "CoR Translator loaded" popup to confirm the mod is active
+- Supports target language selection from the mod settings
+- Includes online learning mode, offline-cache-only mode, and paused mode
+- Provides "Learn visible now", "Intensive scan 5 min", and "Intensive scan 20 min" actions
+- Stores translations by language for offline use after they have been learned
+- Allows exporting and importing translation cache JSON
+
+**Important Limitation:**
+The mod can only translate text that the game has loaded into the page. Hidden events, future popups, and screens you have not visited yet cannot be guaranteed until they appear while the mod is in online learning mode, or until you import a cache that already contains those translations.

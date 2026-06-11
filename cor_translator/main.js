@@ -6,8 +6,6 @@
       event: '/cor_translator/main',
       method: 'boot'
     })
-    let state = daapi.getState()
-    let currentCharacterId = state && state.current && state.current.id
     daapi.addGlobalAction({
       key: 'cor_translator',
       action: {
@@ -20,22 +18,6 @@
         }
       }
     })
-    if (currentCharacterId) {
-      daapi.addCharacterAction({
-        characterId: currentCharacterId,
-        key: 'cor_translator',
-        action: {
-          title: 'CoR Translator',
-          icon: daapi.requireImage('/cor_translator/icon.svg'),
-          isAvailable: true,
-          hideWhenBusy: false,
-          process: {
-            event: '/cor_translator/main',
-            method: 'openSettings'
-          }
-        }
-      })
-    }
   },
   methods: {
     boot() {
@@ -142,7 +124,7 @@
           setTimeout(() => {
             daapi.pushInteractionModalQueue({
               title: 'CoR Translator loaded',
-              message: 'The translator mod is active. If the global button is hidden on Android, tap the current character and use the CoR Translator character action.',
+              message: 'The translator mod is active. Use the CoR Translator global action to open the settings.',
               image: daapi.requireImage('/cor_translator/icon.svg'),
               options: [
                 {
