@@ -6,6 +6,8 @@
       event: '/cor_translator/main',
       method: 'boot'
     })
+    let state = daapi.getState()
+    let currentCharacterId = state && state.current && state.current.id
     daapi.addGlobalAction({
       key: 'cor_translator',
       action: {
@@ -18,11 +20,28 @@
         }
       }
     })
+    if (currentCharacterId) {
+      daapi.addCharacterAction({
+        characterId: currentCharacterId,
+        key: 'cor_translator',
+        action: {
+          title: 'CoR Translator',
+          icon: daapi.requireImage('/cor_translator/icon.svg'),
+          isAvailable: true,
+          hideWhenBusy: false,
+          process: {
+            event: '/cor_translator/main',
+            method: 'openSettings'
+          }
+        }
+      })
+    }
   },
   methods: {
     boot() {
       if (window.corTranslator && window.corTranslator.version === '1.0.0') {
         window.corTranslator.ensureRunning()
+        window.corTranslator.showInstallNoticeOnce()
         return
       }
 
@@ -32,6 +51,7 @@
         storagePrefix: 'corTranslator.v1.',
         configFlag: 'corTranslatorConfig',
         importFlag: 'corTranslatorImportText',
+        noticeFlag: 'corTranslatorInstallNoticeSeen',
         dictionary: {},
         queue: [],
         queued: {},
@@ -91,6 +111,54 @@
           this.startObserver()
           this.startScanTimer()
           this.scheduleScan(30)
+        },
+        showInstallNoticeOnce() {
+          let seen = false
+          try {
+            seen = !!(window.localStorage && window.localStorage.getItem(this.storagePrefix + 'noticeSeen'))
+          } catch (err) {
+            seen = false
+          }
+          try {
+            seen = seen || !!daapi.getGlobalFlag({ flag: this.noticeFlag })
+          } catch (err) {
+            seen = seen || false
+          }
+          if (seen) {
+            return
+          }
+          try {
+            if (window.localStorage) {
+              window.localStorage.setItem(this.storagePrefix + 'noticeSeen', '1')
+            }
+          } catch (err) {
+            this.noteError('Notice flag local storage failed: ' + err.message)
+          }
+          try {
+            daapi.setGlobalFlag({ flag: this.noticeFlag, data: true })
+          } catch (err) {
+            this.noteError('Notice flag write failed: ' + err.message)
+          }
+          setTimeout(() => {
+            daapi.pushInteractionModalQueue({
+              title: 'CoR Translator loaded',
+              message: 'The translator mod is active. If the global button is hidden on Android, tap the current character and use the CoR Translator character action.',
+              image: daapi.requireImage('/cor_translator/icon.svg'),
+              options: [
+                {
+                  variant: 'info',
+                  text: 'Open settings',
+                  action: {
+                    event: this.event,
+                    method: 'openSettings'
+                  }
+                },
+                {
+                  text: 'Later'
+                }
+              ]
+            })
+          }, 800)
         },
         loadConfig() {
           let config = this.readJson(this.storagePrefix + 'config', this.configFlag) || {}
@@ -765,6 +833,7 @@
       }
 
       window.corTranslator.ensureRunning()
+      window.corTranslator.showInstallNoticeOnce()
     },
     openSettings() {
       if (!window.corTranslator) {
