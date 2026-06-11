@@ -36,3 +36,15 @@ A translation helper mod that learns visible English text while online, saves tr
 
 **Important Limitation:**
 The mod can only translate text that the game has loaded into the page. Hidden events, future popups, and screens you have not visited yet cannot be guaranteed until they appear while the mod is in online learning mode, or until you import a cache that already contains those translations.
+
+## Roman Society Mod
+A social simulation layer inspired by court and dynasty politics. It uses existing Citizen of Rome characters and dynasties, generates missing houses across social orders, and gives those houses relationships, agendas, wealth, power, stability, favors, rivalries, and monthly affairs.
+
+**Key Features:**
+- Adds a "Roman Society" global action
+- Groups houses into senatorial, equestrian, civic, plebeian, freedman, and poor orders
+- Lets the player inspect houses and notable characters
+- Supports gifts, dinners, patronage, political support, trade deals, rivalries, reconciliation, praise, introductions, and rumors
+- Gives houses their own monthly virtual-player simulation with AI cash, influence, prestige, property, agendas, family events, and inter-house affairs
+- Produces player-facing events such as office campaigns, marriage alliances, inheritance disputes, trade ventures, scandals, petitions, and slander
+- Applies real effects through cash, prestige, influence, favors, relations, rival pressure, and revenue modifiers
