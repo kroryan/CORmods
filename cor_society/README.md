@@ -8,12 +8,12 @@ Roman Society adds a living social layer to Citizen of Rome.
 - Groups houses into social orders using existing game data: dynasty prestige, heritage, jobs, inheritance, Senate links, and living members.
 - Generates missing houses so every social level has families to interact with.
 - Seeds generated houses with real game characters at startup, preferring young adult founders so they have time to marry, have children, rise, or fall.
-- Uses vanilla Citizen of Rome portraits for vanilla characters through `daapi.getCharacterIcon`.
-- Uses stable generated Roman-style portraits for Society-generated characters, with age progression and inherited look colors.
+- Uses vanilla Citizen of Rome portraits through `daapi.getCharacterIcon` and keeps vanilla look data as the base identity.
+- Uses stable vanilla-based looks for Society-generated characters, with age progression and inherited look colors.
 - Gives generated characters vanilla Citizen of Rome traits through `daapi.addTrait`.
 - Generates persistent Roman-style house shields for the player and every known NPC house.
 - Adds a separate global `House Shield` action for editing the player's shield without cluttering the Society menus.
-- Adds a global `Family Wardrobe` action for changing Society portrait clothing for household members, with outfit availability tied to the player's Society order.
+- Adds a global `Family Wardrobe` action with its own wardrobe icon for changing household clothing, with outfit availability tied to the player's Society order.
 - Tracks persistent relationships, favors, rivalries, patronage, trade ties, allies, rivals, and past affairs.
 - Splits allies/patrons and rivals into separate paged menus with matching overview counts and contextual Back navigation.
 - Shows past affairs as paged notification-style entries with their own event icons.
@@ -48,9 +48,9 @@ The mod uses the game's existing characters and dynasties first. Generated house
 
 Generated people are created with the game's own `daapi.generateCharacter` flow. Society gives them real character IDs, vanilla Roman looks, vanilla traits, `flagDoNotCull`, and family links such as `spouseId`, `fatherId`, `motherId`, and `childrenIds` where appropriate. Every Society-generated living person is marked internally and receives dead generated parents if the game did not already give them parents, so trees have a basic root without adding dead people to living member lists.
 
-Generated characters are given a real game character ID and a vanilla Roman base `look`, so the game can recognize them as normal characters. Society registers generated portraits through the game's DAAPI character-look system (`look.isDAAPI`) so vanilla pages, vanilla trees, marriage screens, popovers, and Society menus can request the same portrait. Children inherit the base look type from parents with small variation, and portraits age by stage without losing that inherited visual base.
+Generated characters are given a real game character ID and a vanilla Roman base `look`, so the game can recognize them as normal characters. Children inherit the base look type from parents with small variation, and portraits age by stage without losing that inherited visual base.
 
-The wardrobe stores a manual `corSocietyOutfit` on the selected household member. For vanilla household members, Society preserves `corSocietyOriginalLook` and restores it if the outfit is returned to automatic. For Society-generated people, the custom DAAPI look remains active so their portrait stays consistent in vanilla and Society screens.
+The wardrobe stores a manual `corSocietyOutfit` on the selected household member. When clothing is manually selected, Society registers a DAAPI look that embeds the character's vanilla portrait as the base image and overlays only the selected clothing on the body area. Society preserves `corSocietyOriginalLook` and restores it when the outfit is returned to automatic, including older saves that still have a previous Society portrait look active.
 
 Generated traits use vanilla trait keys from the official example mod documentation, such as `senator`, `educated`, `literate`, `honorable`, `ambitious`, `gregarious`, `strong`, and `sly`.
 

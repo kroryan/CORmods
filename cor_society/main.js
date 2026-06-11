@@ -33,7 +33,7 @@
       action: {
         title: 'Family Wardrobe',
         tooltip: 'Change Society portrait clothing for members of your household. Consequences: visual clothing changes only; no stats change.',
-        icon: daapi.requireImage('/cor_society/assets/prestige.svg'),
+        icon: daapi.requireImage('/cor_society/assets/wardrobe.svg'),
         isAvailable: true,
         process: {
           event: '/cor_society/main',

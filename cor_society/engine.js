@@ -33,7 +33,7 @@
       action: {
         title: 'Family Wardrobe',
         tooltip: 'Change Society portrait clothing for members of your household. Consequences: visual clothing changes only; no stats change.',
-        icon: daapi.requireImage('/cor_society/assets/prestige.svg'),
+        icon: daapi.requireImage('/cor_society/assets/wardrobe.svg'),
         isAvailable: true,
         process: {
           event: '/cor_society/engine',
@@ -76,7 +76,7 @@
   },
   methods: {
     boot() {
-      if (window.corSociety && window.corSociety.version === '1.1.11') {
+      if (window.corSociety && window.corSociety.version === '1.1.12') {
         window.corSociety.ensure()
         window.corSociety.startPlayerCrestOverlay()
         window.corSociety.startPlayerStatusOverlay()
@@ -84,7 +84,7 @@
       }
 
       window.corSociety = {
-        version: '1.1.11',
+        version: '1.1.12',
         event: '/cor_society/engine',
         flag: 'corSocietyState',
         noticeFlag: 'corSocietyInstallNoticeSeen',
@@ -1135,6 +1135,15 @@
               continue
             }
             let character = state.characters[characterId]
+            if (
+              character &&
+              !character.corSocietyOutfit &&
+              character.look &&
+              character.look.group === 'cor_society' &&
+              character.corSocietyOriginalLook
+            ) {
+              this.restoreOriginalLookIfNeeded(character, true)
+            }
             if (!character || !this.shouldUseSocietyPortrait(character)) {
               continue
             }
@@ -1155,7 +1164,7 @@
               ;['baby', 'teen', 'adult', 'old'].forEach((ageStage) => {
                 let clone = this.characterCloneForSocietyLook(character, currentGender, ageStage)
                 let house = this.houseForPortraitCharacter(clone, society)
-                types[type][currentGender][ageStage] = this.generatedCharacterPortrait(clone, state, house)
+                types[type][currentGender][ageStage] = this.nativeCharacterPortraitWithOutfit(clone, state, house, character.corSocietyOutfit || 'auto')
               })
             })
             if (!types[type].male.baby) {
@@ -1226,8 +1235,8 @@
             console.warn(err)
           }
         },
-        restoreOriginalLookIfNeeded(character) {
-          if (!character || character.corSocietyGenerated || !character.corSocietyOriginalLook) {
+        restoreOriginalLookIfNeeded(character, includeGenerated) {
+          if (!character || (!includeGenerated && character.corSocietyGenerated) || !character.corSocietyOriginalLook) {
             return
           }
           let originalLook = character.corSocietyOriginalLook
@@ -2812,7 +2821,7 @@
           this.pushModal({
             title: 'Family Wardrobe',
             message: 'Choose a household member. Available clothing follows your current Society order and the character age.',
-            image: daapi.requireImage('/cor_society/assets/prestige.svg'),
+            image: daapi.requireImage('/cor_society/assets/wardrobe.svg'),
             options
           })
         },
@@ -2869,8 +2878,8 @@
           } catch (err) {
             console.warn(err)
           }
-          if (!character.corSocietyOutfit && !character.corSocietyGenerated) {
-            this.restoreOriginalLookIfNeeded(character)
+          if (!character.corSocietyOutfit) {
+            this.restoreOriginalLookIfNeeded(character, true)
           }
           this.registerSocietyPortraitLooks(this.ensure(), daapi.getState())
           try {
@@ -2927,7 +2936,7 @@
             return this.characterPortrait(character, state)
           }
           let clone = { ...character, corSocietyOutfit: outfit }
-          return this.generatedCharacterPortrait(clone, state)
+          return this.nativeCharacterPortraitWithOutfit(clone, state, false, outfit)
         },
         openHouse({ houseId, returnTo, returnPage } = {}) {
           let society = this.ensure()
@@ -5304,14 +5313,14 @@
         },
         characterPortrait(character, state, house) {
           if (character && character.corSocietyOutfit) {
-            return this.generatedCharacterPortrait(character, state, house)
-          }
-          if (this.isSocietyGeneratedCharacter(character, house)) {
-            return this.generatedCharacterPortrait(character, state, house)
+            return this.nativeCharacterPortraitWithOutfit(character, state, house, character.corSocietyOutfit)
           }
           let portrait = this.vanillaCharacterPortrait(character, state)
           if (this.isImageData(portrait)) {
             return portrait
+          }
+          if (this.isSocietyGeneratedCharacter(character, house)) {
+            return this.generatedCharacterPortrait(character, state, house)
           }
           return this.generatedCharacterPortrait(character, state, house)
         },
@@ -5342,11 +5351,110 @@
           }
           return false
         },
+        nativeCharacterPortraitWithOutfit(character, state, house, outfit) {
+          state = state || daapi.getState()
+          character = character || {}
+          let baseLook = character.corSocietyOriginalLook || character.look || {}
+          if (baseLook.group === 'cor_society') {
+            baseLook = character.corSocietyOriginalLook || {}
+          }
+          let rawGender = character.gender || baseLook.gender || (character.isMale ? 'male' : 'female')
+          let gender = rawGender === 'female' ? 'female' : 'male'
+          let age = this.age(character, state)
+          let ageStage = baseLook.ageStage || this.characterAgeStage(age)
+          let baseCharacter = {
+            ...character,
+            gender,
+            isMale: gender === 'male',
+            corSocietyOutfit: '',
+            look: {
+              ...baseLook,
+              gender,
+              ageStage
+            }
+          }
+          let basePortrait = this.vanillaCharacterPortrait(baseCharacter, state)
+          if (!this.isImageData(basePortrait)) {
+            return this.generatedCharacterPortrait(character, state, house)
+          }
+          if (!outfit || outfit === 'auto') {
+            return basePortrait
+          }
+          let role = this.characterPortraitRole(character, ageStage, (house && house.stratum) || this.playerStratum(state))
+          let svg = ''
+          svg += '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="512" height="512" viewBox="0 0 512 512">'
+          svg += '<image href="' + this.escapeSvg(basePortrait) + '" xlink:href="' + this.escapeSvg(basePortrait) + '" x="0" y="0" width="512" height="512" preserveAspectRatio="xMidYMid meet"/>'
+          svg += this.nativeClothingOverlaySvg(outfit, gender, ageStage, role)
+          svg += '</svg>'
+          return this.svgDataUri(svg)
+        },
+        nativeClothingOverlaySvg(outfit, gender, ageStage, role) {
+          if (ageStage === 'baby') {
+            return '<g opacity=".96"><path d="M142 404 C174 358 223 340 256 340 C292 340 338 358 370 404 L392 512 H120 Z" fill="#efe7d5"/><path d="M158 420 C214 452 294 452 354 420" fill="none" stroke="#b9945d" stroke-width="16" stroke-linecap="round"/></g>'
+          }
+          let colors = {
+            senatorToga: ['#f7f0e4', '#8b1f35', '#d8c8ad'],
+            togaPraetexta: ['#f5ecdc', '#7b2140', '#d6c6aa'],
+            togaCandida: ['#fffaf0', '#c9b998', '#eadfca'],
+            whiteToga: ['#f4eadb', '#cdbb9e', '#ded0b9'],
+            citizenToga: ['#e7d8bf', '#ad853e', '#c7aa76'],
+            equestrianTunic: ['#efe4cf', '#7d2241', '#c7a56f'],
+            mantle: ['#c19248', '#7c4f27', '#a97834'],
+            simpleTunic: ['#d3b883', '#8c6a3d', '#b08c55'],
+            workerTunic: ['#a47a4b', '#5d3a25', '#825a34'],
+            brownMantle: ['#7e5736', '#3f2a1f', '#694527'],
+            militaryCloak: ['#9f2525', '#6c171b', '#c3964a'],
+            armoredTunic: ['#b6b0a4', '#6e6f73', '#8f7c59'],
+            redMantle: ['#a62624', '#65161a', '#cfa35b'],
+            stola: ['#d9bf87', '#9c6f3c', '#b99359'],
+            whiteStola: ['#f3ead8', '#cdb896', '#decfb9'],
+            palla: ['#bd8d4b', '#744d2b', '#a7783c'],
+            purplePalla: ['#6e345d', '#3f1f3c', '#a580b0'],
+            childStola: ['#dec58f', '#9d7340', '#bd9860'],
+            childTunic: ['#d0b17b', '#836038', '#ad8450']
+          }
+          let palette = colors[outfit] || (role === 'senatorial' ? colors.senatorToga : role === 'worker' ? colors.workerTunic : colors.citizenToga)
+          let cloth = palette[0]
+          let stripe = palette[1]
+          let trim = palette[2]
+          let neckline = gender === 'female' ? 'M224 332 C236 358 276 358 288 332' : 'M220 332 C240 350 272 350 292 332'
+          let svg = '<g opacity=".97">'
+          svg += '<path d="M76 512 L100 408 C126 354 191 326 256 326 C321 326 386 354 412 408 L436 512 Z" fill="' + cloth + '"/>'
+          svg += '<path d="M100 408 C138 436 184 454 256 454 C328 454 374 436 412 408 L436 512 H76 Z" fill="' + trim + '" opacity=".26"/>'
+          if (gender === 'female' || outfit === 'stola' || outfit === 'palla' || outfit === 'purplePalla' || outfit === 'whiteStola') {
+            svg += '<path d="M124 512 C146 408 190 348 256 338 C322 348 366 408 388 512 Z" fill="' + cloth + '"/>'
+            svg += '<path d="M145 384 C185 420 219 436 256 436 C293 436 327 420 367 384" fill="none" stroke="' + trim + '" stroke-width="14" stroke-linecap="round" opacity=".85"/>'
+          } else {
+            svg += '<path d="M98 512 C126 430 170 368 246 336 C226 392 209 452 206 512 Z" fill="#fff8ea" opacity=".36"/>'
+            svg += '<path d="M278 334 C322 376 361 429 388 512 H306 C300 452 291 392 278 334 Z" fill="' + cloth + '" opacity=".88"/>'
+          }
+          if (outfit === 'senatorToga' || outfit === 'togaPraetexta' || outfit === 'equestrianTunic') {
+            svg += '<path d="M288 337 C314 388 334 450 346 512" fill="none" stroke="' + stripe + '" stroke-width="' + (outfit === 'equestrianTunic' ? 12 : 22) + '" stroke-linecap="round"/>'
+          }
+          if (outfit === 'militaryCloak' || outfit === 'redMantle') {
+            svg += '<path d="M91 512 C112 419 159 356 232 334 C204 398 197 455 202 512 Z" fill="' + stripe + '"/><circle cx="211" cy="351" r="14" fill="' + trim + '"/>'
+          }
+          if (outfit === 'armoredTunic') {
+            svg += '<path d="M184 364 H328 L350 512 H162 Z" fill="#8e9293" opacity=".88"/><path d="M184 395 H328 M176 438 H336 M168 481 H344" stroke="#d6d2c7" stroke-width="9" opacity=".75"/>'
+          }
+          svg += '<path d="' + neckline + '" fill="none" stroke="#6c4932" stroke-opacity=".35" stroke-width="11" stroke-linecap="round"/>'
+          svg += '</g>'
+          return svg
+        },
         isImageData(value) {
           if (!value || typeof value !== 'string') {
             return false
           }
-          if (value.indexOf('data:image/') === 0 || value.indexOf('http') === 0 || value.indexOf('blob:') === 0) {
+          if (
+            value.indexOf('data:image/') === 0 ||
+            value.indexOf('http') === 0 ||
+            value.indexOf('blob:') === 0 ||
+            value.indexOf('img/') === 0 ||
+            value.indexOf('/img/') === 0 ||
+            value.indexOf('icons/') === 0 ||
+            value.indexOf('/icons/') === 0 ||
+            /\.(svg|png|jpg|jpeg|webp)(\?|#|$)/i.test(value)
+          ) {
             return true
           }
           return value.length > 120 && /^[A-Za-z0-9+/=]+$/.test(value.slice(0, 160))
@@ -5902,7 +6010,7 @@
           })
         },
         shouldUseSocietyPortrait(character) {
-          return !!(character && (character.corSocietyOutfit || character.corSocietyGenerated))
+          return !!(character && character.corSocietyOutfit)
         },
         characterIdFromElement(element) {
           let node = element
