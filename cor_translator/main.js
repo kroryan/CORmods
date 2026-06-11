@@ -349,8 +349,17 @@
           let translation = this.dictionary[key]
           if (translation) {
             this.applyTranslation(node, originalRaw, translation)
-          } else if (this.canFetchTranslations()) {
-            this.enqueue(key)
+            return
+          }
+          let composite = this.getCachedCompositeTranslation(originalRaw)
+          if (composite) {
+            this.applyTranslation(node, originalRaw, composite, true)
+            return
+          }
+          if (this.canFetchTranslations()) {
+            if (!this.enqueueCompositeSegments(originalRaw)) {
+              this.enqueue(key)
+            }
           }
         },
         getOriginalRaw(node) {
@@ -374,11 +383,11 @@
           node.__corTranslatorLang = ''
           return current
         },
-        applyTranslation(node, originalRaw, translation) {
-          let formatted = this.formatTranslation(this.normalizeText(originalRaw), translation)
+        applyTranslation(node, originalRaw, translation, preserveFormatting) {
+          let formatted = preserveFormatting ? translation : this.formatTranslation(this.normalizeText(originalRaw), translation)
           let leading = (originalRaw.match(/^\s*/) || [''])[0]
           let trailing = (originalRaw.match(/\s*$/) || [''])[0]
-          let translatedRaw = leading + formatted + trailing
+          let translatedRaw = preserveFormatting ? formatted : leading + formatted + trailing
           if (node.nodeValue !== translatedRaw) {
             node.nodeValue = translatedRaw
           }
@@ -396,6 +405,84 @@
             return translated.toUpperCase()
           }
           return translated
+        },
+        getCachedCompositeTranslation(rawText) {
+          let pieces = this.splitCompositeText(rawText)
+          if (pieces.length < 2) {
+            return ''
+          }
+          let changed = false
+          let translated = pieces.map((piece) => {
+            if (!piece.text) {
+              return piece.raw
+            }
+            let key = this.normalizeText(piece.text)
+            if (!this.shouldTranslateRaw(key)) {
+              return piece.raw
+            }
+            let cached = this.dictionary[key]
+            if (!cached) {
+              return piece.raw
+            }
+            changed = true
+            return piece.leading + this.formatTranslation(key, cached) + piece.trailing
+          }).join('')
+          return changed ? translated : ''
+        },
+        enqueueCompositeSegments(rawText) {
+          let pieces = this.splitCompositeText(rawText)
+          if (pieces.length < 2) {
+            return false
+          }
+          let queuedAny = false
+          pieces.forEach((piece) => {
+            if (!piece.text) {
+              return
+            }
+            let key = this.normalizeText(piece.text)
+            if (this.shouldTranslateRaw(key) && !this.dictionary[key]) {
+              this.enqueue(key)
+              queuedAny = true
+            }
+          })
+          return queuedAny
+        },
+        splitCompositeText(rawText) {
+          let raw = String(rawText || '')
+          let parts = raw.split(/(\r?\n)/)
+          let result = []
+          parts.forEach((part) => {
+            if (/^\r?\n$/.test(part)) {
+              result.push({ raw: part, text: '' })
+              return
+            }
+            let leading = (part.match(/^\s*/) || [''])[0]
+            let trailing = (part.match(/\s*$/) || [''])[0]
+            let text = part.slice(leading.length, part.length - trailing.length)
+            let labelMatch = text.match(/^([A-Za-z][A-Za-z ]{1,36})(:)(\s*)(.*)$/)
+            if (labelMatch) {
+              result.push({ raw: leading, text: '' })
+              result.push({ raw: labelMatch[1], leading: '', trailing: '', text: labelMatch[1] })
+              result.push({ raw: labelMatch[2] + labelMatch[3], text: '' })
+              if (labelMatch[4]) {
+                result.push({ raw: labelMatch[4] + trailing, leading: '', trailing, text: labelMatch[4] })
+              } else {
+                result.push({ raw: trailing, text: '' })
+              }
+              return
+            }
+            let reasonMatch = text.match(/^(.+?)\s+\(([^()]+)\)$/)
+            if (reasonMatch) {
+              result.push({ raw: leading, text: '' })
+              result.push({ raw: reasonMatch[1], leading: '', trailing: '', text: reasonMatch[1] })
+              result.push({ raw: ' (', text: '' })
+              result.push({ raw: reasonMatch[2], leading: '', trailing: '', text: reasonMatch[2] })
+              result.push({ raw: ')' + trailing, text: '' })
+              return
+            }
+            result.push({ raw: part, leading, trailing, text })
+          })
+          return result.length > 1 ? result : []
         },
         normalizeText(text) {
           return (text || '').replace(/\s+/g, ' ').trim()
