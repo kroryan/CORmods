@@ -14,6 +14,18 @@
         }
       }
     })
+    daapi.addGlobalAction({
+      key: 'cor_society_player_crest',
+      action: {
+        title: 'House Shield',
+        icon: daapi.requireImage('/cor_society/shield.svg'),
+        isAvailable: true,
+        process: {
+          event: '/cor_society/main',
+          method: 'openPlayerCrest'
+        }
+      }
+    })
     try {
       daapi.addCharacterAction({
         characterId: daapi.getState().current.id,
@@ -71,6 +83,24 @@
       } catch (err) {
         daapi.pushInteractionModalQueue({
           title: 'Roman Society engine error',
+          message: err.name + ': ' + err.message,
+          image: daapi.requireImage('/cor_society/icon.svg')
+        })
+      }
+    },
+    openPlayerCrest: function() {
+      try {
+        daapi.invokeMethod({
+          event: '/cor_society/engine',
+          method: 'boot'
+        })
+        daapi.invokeMethod({
+          event: '/cor_society/engine',
+          method: 'openPlayerCrest'
+        })
+      } catch (err) {
+        daapi.pushInteractionModalQueue({
+          title: 'House Shield error',
           message: err.name + ': ' + err.message,
           image: daapi.requireImage('/cor_society/icon.svg')
         })

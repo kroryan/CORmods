@@ -14,6 +14,18 @@
         }
       }
     })
+    daapi.addGlobalAction({
+      key: 'cor_society_player_crest',
+      action: {
+        title: 'House Shield',
+        icon: daapi.requireImage('/cor_society/shield.svg'),
+        isAvailable: true,
+        process: {
+          event: '/cor_society/engine',
+          method: 'openPlayerCrest'
+        }
+      }
+    })
     try {
       daapi.invokeMethod({
         event: '/cor_society/engine',
@@ -49,13 +61,14 @@
   },
   methods: {
     boot() {
-      if (window.corSociety && window.corSociety.version === '1.0.1') {
+      if (window.corSociety && window.corSociety.version === '1.1.0') {
         window.corSociety.ensure()
+        window.corSociety.startPlayerCrestOverlay()
         return
       }
 
       window.corSociety = {
-        version: '1.0.1',
+        version: '1.1.0',
         event: '/cor_society/engine',
         flag: 'corSocietyState',
         noticeFlag: 'corSocietyInstallNoticeSeen',
@@ -139,6 +152,33 @@
         cognomina: ['Afer', 'Agricola', 'Balbus', 'Caldus', 'Cato', 'Corvus', 'Crispus', 'Felix', 'Flaccus', 'Longus', 'Magnus', 'Naso', 'Niger', 'Paullus', 'Rufus', 'Severus', 'Varro', 'Vetus'],
         maleNames: ['Aulus', 'Caeso', 'Decimus', 'Gaius', 'Gnaeus', 'Lucius', 'Manius', 'Marcus', 'Numerius', 'Publius', 'Quintus', 'Servius', 'Sextus', 'Spurius', 'Titus', 'Tiberius'],
         femaleNames: ['Aelia', 'Aemilia', 'Antonia', 'Appia', 'Atilia', 'Calpurnia', 'Cassia', 'Claudia', 'Cornelia', 'Fabia', 'Flavia', 'Fulvia', 'Julia', 'Licinia', 'Livia', 'Marcia', 'Octavia', 'Pompeia', 'Porcia', 'Valeria'],
+        crestFields: ['crimson', 'vermilion', 'madder', 'purple', 'indigo', 'sea', 'cypress', 'black', 'umber', 'ochre', 'marble'],
+        crestMetals: ['gold', 'bronze', 'silver', 'bone', 'copper'],
+        crestAccents: ['gold', 'bronze', 'silver', 'bone', 'crimson', 'purple', 'indigo', 'cypress', 'black', 'ochre'],
+        crestShapes: ['scutum', 'oval', 'round', 'vexillum', 'kite', 'hex'],
+        crestDivisions: ['plain', 'pale', 'fess', 'bend', 'bendSinister', 'quartered', 'chief', 'chevron', 'saltire', 'orle'],
+        crestPatterns: ['none', 'dots', 'bars', 'waves', 'rays', 'tiles'],
+        crestCharges: ['spqr', 'aquila', 'laurel', 'thunderbolt', 'standard', 'column', 'sun', 'crescent', 'star', 'scales', 'ship', 'spear', 'tower', 'hand'],
+        crestBorders: ['simple', 'double', 'bossed', 'laurel', 'rivets'],
+        crestMarks: ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'X', 'XII', 'SPQR'],
+        crestPalette: {
+          crimson: '#8f1f22',
+          vermilion: '#b93a28',
+          madder: '#6f1628',
+          purple: '#5c2d63',
+          indigo: '#263f73',
+          sea: '#1f6771',
+          cypress: '#2f5f45',
+          black: '#202026',
+          umber: '#6b3f24',
+          ochre: '#b67b2d',
+          marble: '#ded8c8',
+          gold: '#d6aa3c',
+          bronze: '#a56635',
+          silver: '#d8dde1',
+          bone: '#eee0c4',
+          copper: '#c87545'
+        },
         ensure() {
           let state = daapi.getState()
           if (!state || !state.current) {
@@ -146,6 +186,7 @@
           }
           let society = this.load()
           this.syncWithGame(society, state)
+          this.ensureCrests(society, state)
           this.save(society)
           return society
         },
@@ -190,6 +231,10 @@
             houses: {},
             generatedHouseIds: [],
             generatedCharacterIds: [],
+            crests: {},
+            crestSettings: {
+              playerOverlay: true
+            },
             houseRelations: {},
             lastProcessedMonth: '',
             log: []
@@ -210,6 +255,8 @@
           society.houses = society.houses || {}
           society.generatedHouseIds = society.generatedHouseIds || []
           society.generatedCharacterIds = society.generatedCharacterIds || []
+          society.crests = society.crests || {}
+          society.crestSettings = { playerOverlay: true, ...(society.crestSettings || {}) }
           society.houseRelations = society.houseRelations || {}
           society.log = society.log || []
           return society
@@ -863,12 +910,14 @@
         },
         eventFamilyAffair(society, house) {
           let event = house.pendingPlayerEvent
+          let state = daapi.getState()
+          let image = this.houseCrestIcon(society, house)
           this.save(society)
           if (event === 'officeCampaign') {
             daapi.pushInteractionModalQueue({
               title: house.name + ' seeks office',
               message: house.name + ' is gathering support for a magistracy. They ask whether your household will be seen beside them.',
-              image: daapi.requireImage('/cor_society/icon.svg'),
+              image: image,
               options: [
                 {
                   variant: 'info',
@@ -893,7 +942,7 @@
             daapi.pushInteractionModalQueue({
               title: 'Wedding politics in ' + house.name,
               message: house.name + ' invites your household to honor a marriage alliance. A gift would be noticed; absence would be noticed too.',
-              image: daapi.requireImage('/cor_society/icon.svg'),
+              image: image,
               options: [
                 {
                   text: 'Send a wedding gift',
@@ -917,7 +966,7 @@
             daapi.pushInteractionModalQueue({
               title: 'Inheritance dispute: ' + house.name,
               message: 'A dispute inside ' + house.name + ' has become public. They ask you to lend judgment and pressure.',
-              image: daapi.requireImage('/cor_society/icon.svg'),
+              image: image,
               options: [
                 {
                   variant: 'warning',
@@ -942,7 +991,7 @@
             daapi.pushInteractionModalQueue({
               title: house.name + ' expands trade',
               message: house.name + ' has found a profitable opening and offers you a place in the venture.',
-              image: daapi.requireImage('/cor_society/icon.svg'),
+              image: image,
               options: [
                 {
                   variant: 'info',
@@ -967,7 +1016,7 @@
             daapi.pushInteractionModalQueue({
               title: 'Scandal in ' + house.name,
               message: house.name + ' has been embarrassed by a scandal. You can shield them, exploit it, or let the city talk.',
-              image: daapi.requireImage('/cor_society/icon.svg'),
+              image: image,
               options: [
                 {
                   text: 'Shield them',
@@ -1001,11 +1050,12 @@
           }
         },
         eventRivalSlander(society, house) {
+          let state = daapi.getState()
           this.save(society)
           daapi.pushInteractionModalQueue({
             title: house.name + ' spreads a rumor',
             message: 'Your rivals in ' + house.name + ' are whispering that your household has overreached its station. The rumor is small now, but it has teeth.',
-            image: daapi.requireImage('/cor_society/icon.svg'),
+            image: this.houseCrestIcon(society, house),
             options: [
               {
                 variant: 'warning',
@@ -1030,11 +1080,12 @@
           })
         },
         eventFriendlyOpening(society, house) {
+          let state = daapi.getState()
           this.save(society)
           daapi.pushInteractionModalQueue({
             title: house.name + ' offers an opening',
             message: 'A friendly contact from ' + house.name + ' suggests a public exchange of support. It would strengthen your network, though it may bind you to their interests.',
-            image: daapi.requireImage('/cor_society/icon.svg'),
+            image: this.houseCrestIcon(society, house),
             options: [
               {
                 variant: 'info',
@@ -1057,11 +1108,12 @@
           })
         },
         eventPetition(society, house) {
+          let state = daapi.getState()
           this.save(society)
           daapi.pushInteractionModalQueue({
             title: 'Petition from ' + house.name,
             message: 'A lesser family connected to ' + house.name + ' asks for your help in a local dispute. It is not glamorous politics, but gratitude from the lower orders can travel far.',
-            image: daapi.requireImage('/cor_society/icon.svg'),
+            image: this.houseCrestIcon(society, house),
             options: [
               {
                 variant: 'info',
@@ -1133,6 +1185,7 @@
         },
         openEstate({ stratum, page }) {
           let society = this.ensure()
+          let state = daapi.getState()
           page = parseInt(page || 0, 10)
           let houses = this.sortedHouses(society).filter((house) => house.stratum === stratum)
           let pageSize = 8
@@ -1142,6 +1195,7 @@
             return {
               text: this.houseOptionText(house),
               tooltip: this.houseTooltip(house),
+              icons: [this.houseCrestIcon(society, house), this.housePortrait(house, state)],
               action: {
                 event: this.event,
                 method: 'openHouse',
@@ -1185,11 +1239,13 @@
         },
         openRelations() {
           let society = this.ensure()
+          let state = daapi.getState()
           let houses = this.sortedHouses(society).filter((house) => house.relation >= 45 || house.relation <= -35 || house.favor > 0 || house.rivalry)
           let options = houses.slice(0, 10).map((house) => {
             return {
               text: this.houseOptionText(house),
               tooltip: this.houseTooltip(house),
+              icons: [this.houseCrestIcon(society, house), this.housePortrait(house, state)],
               action: {
                 event: this.event,
                 method: 'openHouse',
@@ -1228,6 +1284,96 @@
             ]
           })
         },
+        openPlayerCrest() {
+          let society = this.ensure()
+          let state = daapi.getState()
+          let character = state.characters[(state.current || {}).id] || {}
+          let dynasty = state.dynasties[character.dynastyId] || {}
+          let crest = this.ensurePlayerCrest(society, state)
+          this.save(society)
+          this.applyPlayerCrestOverlay()
+          let houseName = this.houseName(dynasty, character.dynastyId || 'player')
+          let overlayText = society.crestSettings.playerOverlay ? 'On' : 'Off'
+          let message = [
+            'Player house: ' + houseName,
+            'Current character: ' + (character.praenomen || 'Unknown'),
+            'Portrait badge: ' + overlayText,
+            'This menu only edits the player house shield.'
+          ].join('\n')
+          let image = this.crestIcon(crest, 132)
+          daapi.pushInteractionModalQueue({
+            title: 'House Shield',
+            message,
+            image,
+            options: [
+              {
+                variant: 'info',
+                text: 'Randomize',
+                tooltip: 'Generate a fresh Roman-style shield for the player house.',
+                icons: [image],
+                action: {
+                  event: this.event,
+                  method: 'randomizePlayerCrest'
+                }
+              },
+              this.crestCycleOption('Field', 'field', crest),
+              this.crestCycleOption('Metal', 'metal', crest),
+              this.crestCycleOption('Accent', 'accent', crest),
+              this.crestCycleOption('Shape', 'shape', crest),
+              this.crestCycleOption('Division', 'division', crest),
+              this.crestCycleOption('Pattern', 'pattern', crest),
+              this.crestCycleOption('Charge', 'charge', crest),
+              this.crestCycleOption('Border', 'border', crest),
+              {
+                text: 'Portrait badge: ' + overlayText,
+                tooltip: 'Show the player house shield above the current player portrait when the mod can find it in the UI.',
+                action: {
+                  event: this.event,
+                  method: 'togglePlayerCrestOverlay'
+                }
+              },
+              {
+                text: 'Close'
+              }
+            ].filter(Boolean)
+          })
+        },
+        randomizePlayerCrest() {
+          let society = this.ensure()
+          let state = daapi.getState()
+          let crestId = this.playerCrestId(state)
+          society.crests[crestId] = this.generateCrest(crestId + '-player-' + Date.now() + '-' + Math.random())
+          society.crests[crestId].custom = true
+          this.save(society)
+          this.applyPlayerCrestOverlay()
+          this.openPlayerCrest()
+        },
+        cyclePlayerCrest({ part }) {
+          let society = this.ensure()
+          let state = daapi.getState()
+          let crest = this.ensurePlayerCrest(society, state)
+          let list = this.crestList(part)
+          if (list.length) {
+            let index = list.indexOf(crest[part])
+            crest[part] = list[(index + 1 + list.length) % list.length]
+            crest.custom = true
+            crest.seed = String(crest.seed || '') + '-' + part + '-' + crest[part]
+          }
+          this.save(society)
+          this.applyPlayerCrestOverlay()
+          this.openPlayerCrest()
+        },
+        togglePlayerCrestOverlay() {
+          let society = this.ensure()
+          society.crestSettings.playerOverlay = !society.crestSettings.playerOverlay
+          this.save(society)
+          if (society.crestSettings.playerOverlay) {
+            this.applyPlayerCrestOverlay()
+          } else {
+            this.clearPlayerCrestOverlay()
+          }
+          this.openPlayerCrest()
+        },
         openHouse({ houseId }) {
           let society = this.ensure()
           let state = daapi.getState()
@@ -1261,7 +1407,7 @@
           daapi.pushInteractionModalQueue({
             title: house.name,
             message,
-            image: daapi.requireImage('/cor_society/icon.svg'),
+            image: this.houseCrestIcon(society, house),
             options: [
               {
                 variant: 'info',
@@ -1346,11 +1492,13 @@
             this.openHub()
             return
           }
-          let options = (house.notableIds || []).slice(0, 8).map((characterId) => {
+          let peopleIds = this.visibleHousePeople(house, state)
+          let options = peopleIds.slice(0, 12).map((characterId) => {
             let character = state.characters[characterId]
             return {
               text: character ? this.characterName(character, state) : characterId,
               tooltip: character ? this.characterTooltip(character, state) : '',
+              icons: character ? [this.characterPortrait(character, state), this.houseCrestIcon(society, house)] : [this.houseCrestIcon(society, house)],
               action: {
                 event: this.event,
                 method: 'openPerson',
@@ -1368,8 +1516,8 @@
           })
           daapi.pushInteractionModalQueue({
             title: 'People of ' + house.name,
-            message: 'Interact with notable members of this house.',
-            image: daapi.requireImage('/cor_society/icon.svg'),
+            message: peopleIds.length ? 'Notable and visible members of this house.' : 'No visible living members are known yet.',
+            image: this.houseCrestIcon(society, house),
             options
           })
         },
@@ -1390,7 +1538,7 @@
           daapi.pushInteractionModalQueue({
             title: this.characterName(character, state),
             message,
-            image: daapi.requireImage('/cor_society/icon.svg'),
+            image: this.characterPortrait(character, state),
             options: [
               {
                 text: 'Praise in public',
@@ -1788,6 +1936,222 @@
             'Agenda: ' + (house.agenda || 'unknown')
           ].join('\n')
         },
+        ensureCrests(society, state) {
+          society.crests = society.crests || {}
+          society.crestSettings = { playerOverlay: true, ...(society.crestSettings || {}) }
+          this.ensurePlayerCrest(society, state)
+          for (let houseId in society.houses) {
+            if (society.houses.hasOwnProperty(houseId)) {
+              this.ensureHouseCrest(society, society.houses[houseId])
+            }
+          }
+        },
+        playerCrestId(state) {
+          let character = state.characters[(state.current || {}).id] || {}
+          return 'player_' + this.safeId(character.dynastyId || (state.current || {}).id || 'house')
+        },
+        ensurePlayerCrest(society, state) {
+          society.crests = society.crests || {}
+          let crestId = this.playerCrestId(state)
+          let character = state.characters[(state.current || {}).id] || {}
+          let dynasty = state.dynasties[character.dynastyId] || {}
+          if (!society.crests[crestId]) {
+            society.crests[crestId] = this.generateCrest('player-' + crestId + '-' + this.houseName(dynasty, character.dynastyId || crestId))
+          }
+          society.playerCrestId = crestId
+          return society.crests[crestId]
+        },
+        ensureHouseCrest(society, house) {
+          society.crests = society.crests || {}
+          let crestId = 'house_' + this.safeId((house && house.id) || (house && house.name) || 'unknown')
+          if (!society.crests[crestId]) {
+            society.crests[crestId] = this.generateCrest(crestId + '-' + ((house && house.name) || '') + '-' + ((house && house.stratum) || ''))
+          }
+          if (house) {
+            house.crestId = crestId
+          }
+          return society.crests[crestId]
+        },
+        houseCrestIcon(society, house) {
+          let crest = this.ensureHouseCrest(society, house)
+          return this.crestIcon(crest, 112)
+        },
+        crestCycleOption(label, part, crest) {
+          return {
+            text: label + ': ' + this.crestLabel(part, crest[part]),
+            tooltip: 'Cycle ' + label.toLowerCase() + '.',
+            action: {
+              event: this.event,
+              method: 'cyclePlayerCrest',
+              context: { part }
+            }
+          }
+        },
+        crestLabel(part, value) {
+          if (!value) {
+            return 'none'
+          }
+          return String(value)
+            .replace(/([A-Z])/g, ' $1')
+            .replace(/^./, (letter) => letter.toUpperCase())
+        },
+        crestList(part) {
+          if (part === 'field') return this.crestFields
+          if (part === 'metal') return this.crestMetals
+          if (part === 'accent') return this.crestAccents
+          if (part === 'shape') return this.crestShapes
+          if (part === 'division') return this.crestDivisions
+          if (part === 'pattern') return this.crestPatterns
+          if (part === 'charge') return this.crestCharges
+          if (part === 'border') return this.crestBorders
+          return []
+        },
+        generateCrest(seedText) {
+          let random = this.seededRandom(seedText)
+          let pickSeeded = (list) => {
+            return list[Math.floor(random() * list.length) % list.length]
+          }
+          let field = pickSeeded(this.crestFields)
+          let metal = pickSeeded(this.crestMetals)
+          let accent = pickSeeded(this.crestAccents.filter((color) => color !== field))
+          let charge = pickSeeded(this.crestCharges)
+          return {
+            version: 1,
+            seed: String(seedText || ''),
+            shape: pickSeeded(this.crestShapes),
+            field,
+            metal,
+            accent,
+            division: pickSeeded(this.crestDivisions),
+            pattern: pickSeeded(this.crestPatterns),
+            charge,
+            border: pickSeeded(this.crestBorders),
+            mark: pickSeeded(this.crestMarks)
+          }
+        },
+        crestIcon(crest, size) {
+          return this.svgDataUri(this.crestSvg(crest, size || 112))
+        },
+        crestColor(name) {
+          return this.crestPalette[name] || this.crestPalette.crimson
+        },
+        crestSvg(crest, size) {
+          crest = crest || this.generateCrest('fallback')
+          let field = this.crestColor(crest.field)
+          let metal = this.crestColor(crest.metal)
+          let accent = this.crestColor(crest.accent)
+          let edge = '#151316'
+          let path = this.crestShapePath(crest.shape)
+          let svg = ''
+          svg += '<svg xmlns="http://www.w3.org/2000/svg" width="' + size + '" height="' + Math.round(size * 1.15) + '" viewBox="0 0 96 112">'
+          svg += '<defs><clipPath id="shieldClip"><path d="' + path + '"/></clipPath>'
+          svg += '<filter id="shadow" x="-20%" y="-20%" width="140%" height="150%"><feDropShadow dx="0" dy="3" stdDeviation="2" flood-color="#000" flood-opacity=".35"/></filter></defs>'
+          svg += '<rect width="96" height="112" fill="none"/>'
+          svg += '<g filter="url(#shadow)">'
+          svg += '<path d="' + path + '" fill="' + field + '" stroke="' + edge + '" stroke-width="3"/>'
+          svg += '<g clip-path="url(#shieldClip)">'
+          svg += this.crestDivisionSvg(crest.division, field, metal, accent)
+          svg += this.crestPatternSvg(crest.pattern, metal, accent)
+          svg += '</g>'
+          svg += this.crestChargeSvg(crest.charge, metal, accent, crest.mark)
+          svg += this.crestBorderSvg(crest.border, path, metal, accent)
+          svg += '</g></svg>'
+          return svg
+        },
+        crestShapePath(shape) {
+          if (shape === 'oval') return 'M48 8 C70 10 84 26 84 50 C84 80 66 101 48 106 C30 101 12 80 12 50 C12 26 26 10 48 8 Z'
+          if (shape === 'round') return 'M48 10 C70 10 86 27 86 51 C86 77 69 96 48 104 C27 96 10 77 10 51 C10 27 26 10 48 10 Z'
+          if (shape === 'vexillum') return 'M14 12 H82 V82 L66 74 L48 90 L30 74 L14 82 Z'
+          if (shape === 'kite') return 'M48 6 L82 22 V58 C82 80 62 98 48 108 C34 98 14 80 14 58 V22 Z'
+          if (shape === 'hex') return 'M30 10 H66 L86 30 V74 L48 106 L10 74 V30 Z'
+          return 'M16 10 H80 C84 22 86 36 84 52 C82 78 66 98 48 106 C30 98 14 78 12 52 C10 36 12 22 16 10 Z'
+        },
+        crestDivisionSvg(division, field, metal, accent) {
+          if (division === 'pale') return '<rect x="48" y="0" width="48" height="112" fill="' + metal + '"/>'
+          if (division === 'fess') return '<rect x="0" y="50" width="96" height="62" fill="' + metal + '"/>'
+          if (division === 'bend') return '<path d="M-8 88 L78 2 H106 L18 112 Z" fill="' + metal + '"/>'
+          if (division === 'bendSinister') return '<path d="M-10 4 H20 L106 90 V116 Z" fill="' + metal + '"/>'
+          if (division === 'quartered') return '<rect x="48" y="0" width="48" height="56" fill="' + metal + '"/><rect x="0" y="56" width="48" height="56" fill="' + metal + '"/>'
+          if (division === 'chief') return '<rect x="0" y="0" width="96" height="30" fill="' + metal + '"/>'
+          if (division === 'chevron') return '<path d="M0 76 L48 28 L96 76 L96 96 L48 48 L0 96 Z" fill="' + metal + '"/>'
+          if (division === 'saltire') return '<path d="M-6 8 L8 -6 L102 98 L88 112 Z M88 -6 L102 8 L8 112 L-6 98 Z" fill="' + metal + '"/>'
+          if (division === 'orle') return '<path d="M22 20 H74 C78 32 78 45 76 56 C73 78 60 91 48 97 C36 91 23 78 20 56 C18 45 18 32 22 20 Z" fill="none" stroke="' + metal + '" stroke-width="9"/>'
+          return '<path d="M0 0 H96 V112 H0 Z" fill="' + field + '"/><path d="M12 20 H84" stroke="' + accent + '" stroke-opacity=".35" stroke-width="2"/>'
+        },
+        crestPatternSvg(pattern, metal, accent) {
+          if (pattern === 'dots') {
+            let dots = ''
+            for (let y = 22; y < 92; y += 18) {
+              for (let x = 24; x < 78; x += 18) {
+                dots += '<circle cx="' + x + '" cy="' + y + '" r="2.6" fill="' + accent + '" opacity=".65"/>'
+              }
+            }
+            return dots
+          }
+          if (pattern === 'bars') return '<path d="M10 28 H86 M8 48 H88 M8 68 H88 M12 88 H84" stroke="' + accent + '" stroke-width="4" opacity=".5"/>'
+          if (pattern === 'waves') return '<path d="M4 36 C18 25 30 47 44 36 C58 25 70 47 92 34 M4 60 C18 49 30 71 44 60 C58 49 70 71 92 58 M4 84 C18 73 30 95 44 84 C58 73 70 95 92 82" fill="none" stroke="' + accent + '" stroke-width="3" opacity=".55"/>'
+          if (pattern === 'rays') return '<path d="M48 56 L48 -10 M48 56 L104 10 M48 56 L108 56 M48 56 L102 104 M48 56 L48 122 M48 56 L-6 104 M48 56 L-12 56 M48 56 L-8 10" stroke="' + accent + '" stroke-width="4" opacity=".35"/>'
+          if (pattern === 'tiles') return '<path d="M0 30 H96 M0 54 H96 M0 78 H96 M24 0 V112 M48 0 V112 M72 0 V112" stroke="' + accent + '" stroke-width="2" opacity=".35"/>'
+          return ''
+        },
+        crestChargeSvg(charge, metal, accent, mark) {
+          let stroke = ' stroke="' + accent + '" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"'
+          if (charge === 'spqr') return '<text x="48" y="61" text-anchor="middle" font-family="serif" font-size="22" font-weight="700" fill="' + metal + '" stroke="' + accent + '" stroke-width="1">SPQR</text>'
+          if (charge === 'aquila') return '<path d="M48 26 L56 44 L78 36 L62 55 L76 68 L55 65 L48 86 L41 65 L20 68 L34 55 L18 36 L40 44 Z" fill="' + metal + '" stroke="' + accent + '" stroke-width="3" stroke-linejoin="round"/><circle cx="48" cy="40" r="5" fill="' + accent + '"/>'
+          if (charge === 'laurel') return '<path d="M35 78 C22 58 25 36 42 24 M61 78 C74 58 71 36 54 24" fill="none"' + stroke + '/><path d="M33 68 L23 65 M31 58 L21 54 M31 47 L22 42 M38 34 L30 28 M63 68 L73 65 M65 58 L75 54 M65 47 L74 42 M58 34 L66 28" fill="none"' + stroke + '/><text x="48" y="61" text-anchor="middle" font-family="serif" font-size="15" font-weight="700" fill="' + metal + '">' + this.escapeSvg(mark || 'I') + '</text>'
+          if (charge === 'thunderbolt') return '<path d="M55 20 L30 58 H47 L39 92 L68 48 H50 Z" fill="' + metal + '" stroke="' + accent + '" stroke-width="3" stroke-linejoin="round"/>'
+          if (charge === 'standard') return '<path d="M48 22 V88 M35 30 H68 V48 H35 Z M31 68 H65" fill="none"' + stroke + '/><circle cx="48" cy="20" r="6" fill="' + metal + '" stroke="' + accent + '" stroke-width="3"/>'
+          if (charge === 'column') return '<path d="M35 34 H61 M32 78 H64 M38 34 V78 M48 34 V78 M58 34 V78 M30 28 H66 L60 20 H36 Z M28 86 H68 L62 78 H34 Z" fill="none"' + stroke + '/>'
+          if (charge === 'sun') return '<circle cx="48" cy="56" r="16" fill="' + metal + '" stroke="' + accent + '" stroke-width="3"/><path d="M48 23 V33 M48 79 V91 M15 56 H28 M68 56 H81 M25 33 L34 42 M62 70 L71 79 M71 33 L62 42 M34 70 L25 79" fill="none"' + stroke + '/>'
+          if (charge === 'crescent') return '<path d="M58 26 C40 35 34 58 46 78 C34 74 24 62 24 48 C24 32 39 20 58 26 Z" fill="' + metal + '" stroke="' + accent + '" stroke-width="3" stroke-linejoin="round"/>'
+          if (charge === 'star') return '<path d="M48 22 L56 45 L80 45 L60 59 L68 84 L48 69 L28 84 L36 59 L16 45 L40 45 Z" fill="' + metal + '" stroke="' + accent + '" stroke-width="3" stroke-linejoin="round"/>'
+          if (charge === 'scales') return '<path d="M48 28 V78 M30 40 H66 M36 40 L25 63 H47 Z M60 40 L49 63 H71 Z M36 82 H60" fill="none"' + stroke + '/>'
+          if (charge === 'ship') return '<path d="M22 68 C32 82 64 82 76 68 Z M34 68 V30 L62 48 H34" fill="' + metal + '" stroke="' + accent + '" stroke-width="3" stroke-linejoin="round"/><path d="M31 74 H66" fill="none"' + stroke + '/>'
+          if (charge === 'spear') return '<path d="M48 22 V88 M48 20 L39 38 H57 Z M34 62 H62" fill="none"' + stroke + '/>'
+          if (charge === 'tower') return '<path d="M31 82 V41 H38 V31 H45 V41 H52 V31 H59 V41 H66 V82 Z M41 82 V65 C41 55 55 55 55 65 V82" fill="' + metal + '" stroke="' + accent + '" stroke-width="3" stroke-linejoin="round"/>'
+          if (charge === 'hand') return '<path d="M37 76 V44 C37 39 44 39 44 44 V58 V36 C44 31 51 31 51 36 V58 V42 C51 37 58 37 58 42 V60 L63 52 C66 47 72 51 69 57 L58 81 C54 89 40 87 37 76 Z" fill="' + metal + '" stroke="' + accent + '" stroke-width="3" stroke-linejoin="round"/>'
+          return '<circle cx="48" cy="56" r="20" fill="' + metal + '" stroke="' + accent + '" stroke-width="4"/>'
+        },
+        crestBorderSvg(border, path, metal, accent) {
+          if (border === 'double') return '<path d="' + path + '" fill="none" stroke="' + metal + '" stroke-width="7"/><path d="' + path + '" fill="none" stroke="' + accent + '" stroke-width="3"/>'
+          if (border === 'bossed') return '<path d="' + path + '" fill="none" stroke="' + metal + '" stroke-width="5"/><circle cx="24" cy="23" r="3" fill="' + accent + '"/><circle cx="72" cy="23" r="3" fill="' + accent + '"/><circle cx="18" cy="57" r="3" fill="' + accent + '"/><circle cx="78" cy="57" r="3" fill="' + accent + '"/><circle cx="48" cy="98" r="3" fill="' + accent + '"/>'
+          if (border === 'laurel') return '<path d="' + path + '" fill="none" stroke="' + metal + '" stroke-width="4"/><path d="M20 30 C31 43 31 72 47 96 M76 30 C65 43 65 72 49 96" fill="none" stroke="' + accent + '" stroke-width="3" opacity=".8"/>'
+          if (border === 'rivets') return '<path d="' + path + '" fill="none" stroke="' + metal + '" stroke-width="4"/><circle cx="28" cy="19" r="2.4" fill="' + metal + '"/><circle cx="48" cy="16" r="2.4" fill="' + metal + '"/><circle cx="68" cy="19" r="2.4" fill="' + metal + '"/><circle cx="22" cy="50" r="2.4" fill="' + metal + '"/><circle cx="74" cy="50" r="2.4" fill="' + metal + '"/><circle cx="48" cy="94" r="2.4" fill="' + metal + '"/>'
+          return '<path d="' + path + '" fill="none" stroke="' + metal + '" stroke-width="5"/>'
+        },
+        svgDataUri(svg) {
+          try {
+            if (typeof window !== 'undefined' && window.btoa) {
+              return 'data:image/svg+xml;base64,' + window.btoa(svg)
+            }
+          } catch (err) {
+            console.warn(err)
+          }
+          return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg)
+        },
+        hashString(value) {
+          let hash = 2166136261
+          value = String(value || '')
+          for (let i = 0; i < value.length; i++) {
+            hash ^= value.charCodeAt(i)
+            hash = Math.imul(hash, 16777619)
+          }
+          return hash >>> 0
+        },
+        seededRandom(seedText) {
+          let seed = this.hashString(seedText) || 1
+          return () => {
+            seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0
+            return seed / 4294967296
+          }
+        },
+        escapeSvg(value) {
+          return String(value || '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+        },
         characterName(character, state) {
           let dynasty = state.dynasties[character.dynastyId] || {}
           return (character.praenomen || 'Unknown') + ', ' + this.houseName(dynasty, character.dynastyId)
@@ -1802,6 +2166,191 @@
             'Traits: ' + traits,
             'Skills: I ' + Math.round(skills.intelligence || 0) + ', S ' + Math.round(skills.stewardship || 0) + ', E ' + Math.round(skills.eloquence || 0) + ', C ' + Math.round(skills.combat || 0)
           ].join('\n')
+        },
+        characterPortrait(character, state) {
+          try {
+            character = character || {}
+            let look = character.look || {}
+            let age = this.age(character, state || daapi.getState())
+            let gender = character.gender || look.gender || (character.isMale ? 'male' : 'female')
+            let ageStage = 'adult'
+            if (age < 4) {
+              ageStage = 'baby'
+            } else if (age < 16) {
+              ageStage = 'teen'
+            } else if (age >= 55) {
+              ageStage = 'old'
+            }
+            return daapi.getCharacterIcon({
+              group: look.group || 'roman',
+              gender,
+              type: look.type || 'brown',
+              ageStage
+            })
+          } catch (err) {
+            console.warn(err)
+            return daapi.requireImage('/cor_society/icon.svg')
+          }
+        },
+        visibleHousePeople(house, state) {
+          let seen = {}
+          let ids = []
+          ;[(house && house.notableIds) || [], (house && house.memberIds) || []].forEach((list) => {
+            list.forEach((characterId) => {
+              if (seen[characterId]) {
+                return
+              }
+              let character = state && state.characters ? state.characters[characterId] : false
+              if (character && character.isDead) {
+                return
+              }
+              seen[characterId] = true
+              ids.push(characterId)
+            })
+          })
+          return ids
+        },
+        housePortrait(house, state) {
+          state = state || daapi.getState()
+          let ids = this.visibleHousePeople(house, state)
+          let character = ids.length ? (state.characters[ids[0]] || false) : false
+          return character ? this.characterPortrait(character, state) : daapi.requireImage('/cor_society/icon.svg')
+        },
+        startPlayerCrestOverlay() {
+          if (this.playerCrestOverlayStarted) {
+            this.applyPlayerCrestOverlay()
+            return
+          }
+          this.playerCrestOverlayStarted = true
+          this.applyPlayerCrestOverlay()
+          if (typeof window !== 'undefined' && window.setInterval) {
+            window.setInterval(() => {
+              try {
+                if (window.corSociety) {
+                  window.corSociety.applyPlayerCrestOverlay()
+                }
+              } catch (err) {
+                console.warn(err)
+              }
+            }, 1600)
+          }
+        },
+        applyPlayerCrestOverlay() {
+          if (typeof document === 'undefined') {
+            return
+          }
+          let state = daapi.getState()
+          let society = this.load()
+          society.crestSettings = { playerOverlay: true, ...(society.crestSettings || {}) }
+          if (!society.crestSettings.playerOverlay) {
+            this.clearPlayerCrestOverlay()
+            return
+          }
+          let crestId = this.playerCrestId(state)
+          let hadCrest = society.crests && society.crests[crestId]
+          let crest = this.ensurePlayerCrest(society, state)
+          if (!hadCrest) {
+            this.save(society)
+          }
+          let target = this.findCurrentPortraitImage(state)
+          if (!target) {
+            this.clearPlayerCrestOverlay()
+            return
+          }
+          let rect = target.getBoundingClientRect()
+          if (!rect || rect.width < 28 || rect.height < 28) {
+            this.clearPlayerCrestOverlay()
+            return
+          }
+          let badge = document.getElementById('corSocietyPlayerCrestBadge')
+          if (!badge) {
+            badge = document.createElement('img')
+            badge.id = 'corSocietyPlayerCrestBadge'
+            badge.className = 'cor-society-player-crest-badge'
+            badge.setAttribute('aria-hidden', 'true')
+            badge.alt = ''
+            document.body.appendChild(badge)
+          }
+          let size = Math.max(24, Math.min(42, Math.round(rect.width * 0.38)))
+          badge.src = this.crestIcon(crest, 96)
+          badge.style.left = Math.round(rect.left + rect.width - size * 0.72) + 'px'
+          badge.style.top = Math.round(Math.max(2, rect.top - size * 0.22)) + 'px'
+          badge.style.width = size + 'px'
+          badge.style.height = Math.round(size * 1.15) + 'px'
+          badge.style.display = 'block'
+        },
+        clearPlayerCrestOverlay() {
+          if (typeof document === 'undefined') {
+            return
+          }
+          let badge = document.getElementById('corSocietyPlayerCrestBadge')
+          if (badge && badge.parentElement) {
+            badge.parentElement.removeChild(badge)
+          }
+        },
+        findCurrentPortraitImage(state) {
+          if (typeof document === 'undefined') {
+            return false
+          }
+          let currentId = (state.current || {}).id
+          let escapedId = this.attrEscape(currentId)
+          let selectors = [
+            '[data-character-id="' + escapedId + '"] img',
+            '[data-characterid="' + escapedId + '"] img',
+            '[data-character="' + escapedId + '"] img',
+            '[data-id="' + escapedId + '"] img',
+            'img[data-character-id="' + escapedId + '"]',
+            'img[data-characterid="' + escapedId + '"]',
+            'img[data-character="' + escapedId + '"]',
+            'img[data-id="' + escapedId + '"]'
+          ]
+          for (let i = 0; i < selectors.length; i++) {
+            let found = this.bestVisibleImage(Array.prototype.slice.call(document.querySelectorAll(selectors[i])))
+            if (found) {
+              return found
+            }
+          }
+          let character = state.characters[currentId]
+          if (!character) {
+            return false
+          }
+          let portrait = this.characterPortrait(character, state)
+          let exact = []
+          let images = Array.prototype.slice.call(document.querySelectorAll('img'))
+          images.forEach((img) => {
+            let src = img.getAttribute('src') || img.src || ''
+            if (src === portrait || img.src === portrait) {
+              exact.push(img)
+            }
+          })
+          return this.bestVisibleImage(exact)
+        },
+        bestVisibleImage(images) {
+          let best = false
+          let bestScore = -1
+          images.forEach((img) => {
+            if (!img || !img.getBoundingClientRect) {
+              return
+            }
+            let rect = img.getBoundingClientRect()
+            if (rect.width < 28 || rect.height < 28 || rect.bottom < 0 || rect.right < 0 || rect.top > window.innerHeight || rect.left > window.innerWidth) {
+              return
+            }
+            let style = window.getComputedStyle ? window.getComputedStyle(img) : {}
+            if (style.display === 'none' || style.visibility === 'hidden' || parseFloat(style.opacity || 1) === 0) {
+              return
+            }
+            let inModal = img.closest && img.closest('.modal, #interactionModal, .interaction-modal')
+            let score = rect.width * rect.height - (inModal ? 100000 : 0)
+            if (score > bestScore) {
+              best = img
+              bestScore = score
+            }
+          })
+          return best
+        },
+        attrEscape(value) {
+          return String(value || '').replace(/\\/g, '\\\\').replace(/"/g, '\\"')
         },
         log(society, text) {
           let state = daapi.getState()
@@ -1838,6 +2387,7 @@
       }
 
       window.corSociety.ensure()
+      window.corSociety.startPlayerCrestOverlay()
     },
     monthlyTick() {
       if (!window.corSociety) {
@@ -1865,6 +2415,18 @@
     },
     openLog() {
       window.corSociety.openLog()
+    },
+    openPlayerCrest() {
+      window.corSociety.openPlayerCrest()
+    },
+    randomizePlayerCrest() {
+      window.corSociety.randomizePlayerCrest()
+    },
+    cyclePlayerCrest(args) {
+      window.corSociety.cyclePlayerCrest(args || {})
+    },
+    togglePlayerCrestOverlay() {
+      window.corSociety.togglePlayerCrestOverlay()
     },
     openHouse(args) {
       window.corSociety.openHouse(args || {})
