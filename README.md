@@ -51,15 +51,17 @@ A social simulation layer inspired by court and dynasty politics. It uses existi
 **Key Features:**
 - Adds a "Roman Society" global action without adding a separate character action
 - Adds a separate "House Shield" global action for configuring the player's house shield
+- Adds a "Family Wardrobe" global action for Society portrait clothing on household members, with outfit availability tied to social order
 - Groups houses into senatorial, equestrian, civic, plebeian, freedman, and poor orders
 - Seeds generated houses with real game characters at startup, including visible family members, spouse links, and children where age makes sense
 - Prefers young adult generated founders and gives generated people dead parents when missing, so trees have roots while living member lists stay clean
-- Uses social-order icons, separate Allies/Patrons and Rivals menus, and paged Past Affairs displayed as individual notification-style entries
+- Uses social-order icons, separate paged Allies/Patrons and Rivals menus with matching overview counts, and paged Past Affairs displayed as individual notification-style entries
 - Lets the player inspect houses and every known living dynasty member through Notables, Established members, and Common kin, with vanilla portraits for vanilla people, stable Society portraits for generated people, and generated Roman-style house shields
 - Adds one "Full family tree" action per Society character, opening a graphical Society tree with portrait cards, spouse links, child branches, zoom, centering, stable Back navigation, and dark/light theme detection
 - Exposes vanilla / other mod character actions when a character currently has them
 - Generated Society characters receive vanilla Citizen of Rome traits through the game's trait API
 - Lets the player arrange marriages between their family and NPC houses through the vanilla marriage API, including the current player character when unmarried, without faking spouse links if the vanilla API rejects a wedding
+- Registers Society-generated portraits through the game's DAAPI character-look system so vanilla pages, trees, marriage screens, popovers, and Society menus request the same portrait
 - Marriage actions show a short unavailable reason in parentheses and affect prestige, influence, revenue, cash, relations, and favors according to social rank
 - Reads the player's real vanilla property class, senatorial flag, and heritage to decide Society order and update the visible citizen title on the main game screen without overwriting vanilla heritage
 - All Society buttons, including event options and global actions, provide hold/long-press tooltips explaining the consequences before pressing
@@ -68,3 +70,4 @@ A social simulation layer inspired by court and dynasty politics. It uses existi
 - Lets large vanilla changes to the player's cash, influence, or prestige shift Society relations, so base-game events can affect the social map too
 - Produces player-facing events such as office campaigns, marriage alliances, inheritance disputes, trade ventures, scandals, petitions, and slander
 - Applies real effects through cash, prestige, influence, favors, relations, and revenue modifiers without a permanent monthly rival-pressure penalty
+- Clears the base game's `flagUsedMods` achievement blocker during Society ticks so platform achievements can remain available with Society active; easy mode and sandbox mode still block them

@@ -13,8 +13,9 @@ Roman Society adds a living social layer to Citizen of Rome.
 - Gives generated characters vanilla Citizen of Rome traits through `daapi.addTrait`.
 - Generates persistent Roman-style house shields for the player and every known NPC house.
 - Adds a separate global `House Shield` action for editing the player's shield without cluttering the Society menus.
+- Adds a global `Family Wardrobe` action for changing Society portrait clothing for household members, with outfit availability tied to the player's Society order.
 - Tracks persistent relationships, favors, rivalries, patronage, trade ties, allies, rivals, and past affairs.
-- Splits allies/patrons and rivals into separate menus.
+- Splits allies/patrons and rivals into separate paged menus with matching overview counts and contextual Back navigation.
 - Shows past affairs as paged notification-style entries with their own event icons.
 - Uses copied vanilla interface icons for social orders and Society actions where the mod API allows local assets.
 - Lets the player inspect every known living dynasty member through Notables, Established members, and Common kin.
@@ -47,7 +48,9 @@ The mod uses the game's existing characters and dynasties first. Generated house
 
 Generated people are created with the game's own `daapi.generateCharacter` flow. Society gives them real character IDs, vanilla Roman looks, vanilla traits, `flagDoNotCull`, and family links such as `spouseId`, `fatherId`, `motherId`, and `childrenIds` where appropriate. Every Society-generated living person is marked internally and receives dead generated parents if the game did not already give them parents, so trees have a basic root without adding dead people to living member lists.
 
-Generated characters are given a real game character ID and a vanilla Roman `look` (`group: roman`, type, gender), so the game can recognize them as normal characters. Society uses its own generated portrait for those characters inside the graphical Society tree to avoid switching visual style; children inherit look type from parents with small variation, and portraits age by stage without changing the underlying look type.
+Generated characters are given a real game character ID and a vanilla Roman base `look`, so the game can recognize them as normal characters. Society registers generated portraits through the game's DAAPI character-look system (`look.isDAAPI`) so vanilla pages, vanilla trees, marriage screens, popovers, and Society menus can request the same portrait. Children inherit the base look type from parents with small variation, and portraits age by stage without losing that inherited visual base.
+
+The wardrobe stores a manual `corSocietyOutfit` on the selected household member. For vanilla household members, Society preserves `corSocietyOriginalLook` and restores it if the outfit is returned to automatic. For Society-generated people, the custom DAAPI look remains active so their portrait stays consistent in vanilla and Society screens.
 
 Generated traits use vanilla trait keys from the official example mod documentation, such as `senator`, `educated`, `literate`, `honorable`, `ambitious`, `gregarious`, `strong`, and `sly`.
 
@@ -62,3 +65,5 @@ House shields are generated locally as SVG images and saved in the mod state. NP
 Each month, houses pursue their own agenda. Some affairs only change the social map and appear in `Past Affairs`; others become decisions for the player and can affect influence, prestige, cash, relationships, favors, rivalries, or revenue. Trade ventures are now investments with a one or two month settlement notice instead of instant monthly income.
 
 Roman Society does not use `setCurrentCharacter` and does not take control away from the human player. Vanilla family screens are opened by setting the game's `selectedCharacterId`, which selects the tree being viewed without changing the current playable character. NPC houses are simulated by the mod as separate virtual players, marked internally as `cor_society_ai`; they can rise or fall between social orders as their simulated wealth, power, and stability change.
+
+The base game blocks external platform achievements when `current.flagUsedMods` is true. Society clears that mod-used flag during its own tick so achievements can remain available while using this mod, but vanilla easy mode and sandbox mode still block achievements.

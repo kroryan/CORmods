@@ -28,6 +28,19 @@
         }
       }
     })
+    daapi.addGlobalAction({
+      key: 'cor_society_wardrobe',
+      action: {
+        title: 'Family Wardrobe',
+        tooltip: 'Change Society portrait clothing for members of your household. Consequences: visual clothing changes only; no stats change.',
+        icon: daapi.requireImage('/cor_society/assets/prestige.svg'),
+        isAvailable: true,
+        process: {
+          event: '/cor_society/main',
+          method: 'openWardrobe'
+        }
+      }
+    })
     try {
       daapi.invokeMethod({
         event: '/cor_society/engine',
@@ -85,6 +98,24 @@
       } catch (err) {
         daapi.pushInteractionModalQueue({
           title: 'House Shield error',
+          message: err.name + ': ' + err.message,
+          image: daapi.requireImage('/cor_society/icon.svg')
+        })
+      }
+    },
+    openWardrobe: function() {
+      try {
+        daapi.invokeMethod({
+          event: '/cor_society/engine',
+          method: 'boot'
+        })
+        daapi.invokeMethod({
+          event: '/cor_society/engine',
+          method: 'openWardrobe'
+        })
+      } catch (err) {
+        daapi.pushInteractionModalQueue({
+          title: 'Family Wardrobe error',
           message: err.name + ': ' + err.message,
           image: daapi.requireImage('/cor_society/icon.svg')
         })

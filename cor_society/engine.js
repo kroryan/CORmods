@@ -28,6 +28,19 @@
         }
       }
     })
+    daapi.addGlobalAction({
+      key: 'cor_society_wardrobe',
+      action: {
+        title: 'Family Wardrobe',
+        tooltip: 'Change Society portrait clothing for members of your household. Consequences: visual clothing changes only; no stats change.',
+        icon: daapi.requireImage('/cor_society/assets/prestige.svg'),
+        isAvailable: true,
+        process: {
+          event: '/cor_society/engine',
+          method: 'openWardrobe'
+        }
+      }
+    })
     try {
       daapi.invokeMethod({
         event: '/cor_society/engine',
@@ -63,7 +76,7 @@
   },
   methods: {
     boot() {
-      if (window.corSociety && window.corSociety.version === '1.1.10') {
+      if (window.corSociety && window.corSociety.version === '1.1.11') {
         window.corSociety.ensure()
         window.corSociety.startPlayerCrestOverlay()
         window.corSociety.startPlayerStatusOverlay()
@@ -71,7 +84,7 @@
       }
 
       window.corSociety = {
-        version: '1.1.10',
+        version: '1.1.11',
         event: '/cor_society/engine',
         flag: 'corSocietyState',
         noticeFlag: 'corSocietyInstallNoticeSeen',
@@ -205,6 +218,8 @@
           this.ensureGeneratedLooks(society, state)
           this.ensureCrests(society, state)
           this.syncPlayerSocietyStatus(society, state)
+          this.registerSocietyPortraitLooks(society, state)
+          this.allowAchievementsWithSociety(state)
           society.lastEnsureKey = this.ensureKey(society, state)
           this.save(society)
           return society
@@ -393,6 +408,9 @@
           if (method === 'openRelations') return 'Consequences: opens allies and patrons; no stats change.'
           if (method === 'openAllies') return 'Consequences: opens allies and patrons; no stats change.'
           if (method === 'openRivals') return 'Consequences: opens rival houses; no stats change.'
+          if (method === 'openWardrobe') return 'Consequences: opens the household wardrobe; no stats change.'
+          if (method === 'openWardrobeCharacter') return 'Consequences: opens clothing choices for this family member; no stats change.'
+          if (method === 'applyWardrobeOutfit') return 'Consequences: changes Society portrait clothing only; no stats change.'
           if (method === 'openLog') return 'Consequences: opens past affairs; no stats change.'
           if (method === 'openLogEntry') return 'Consequences: opens this affair notice; no stats change.'
           if (method === 'openHub') return 'Consequences: returns to the Society overview; no stats change.'
@@ -1106,6 +1124,155 @@
               console.warn(err)
             }
           })
+        },
+        registerSocietyPortraitLooks(society, state) {
+          if (typeof daapi === 'undefined' || !daapi.addCharacterLook || !state || !state.characters) {
+            return
+          }
+          let targets = []
+          for (let characterId in state.characters) {
+            if (!state.characters.hasOwnProperty(characterId)) {
+              continue
+            }
+            let character = state.characters[characterId]
+            if (!character || !this.shouldUseSocietyPortrait(character)) {
+              continue
+            }
+            character.id = character.id || characterId
+            targets.push(character)
+          }
+          if (!targets.length) {
+            return
+          }
+          let types = {}
+          targets.forEach((character) => {
+            let type = this.societyLookType(character)
+            let rawGender = character.gender || ((character.look || {}).gender) || (character.isMale ? 'male' : 'female')
+            let gender = rawGender === 'female' ? 'female' : 'male'
+            let genders = gender === 'female' ? ['female'] : gender === 'male' ? ['male'] : ['male', 'female']
+            types[type] = types[type] || { male: {}, female: {} }
+            genders.forEach((currentGender) => {
+              ;['baby', 'teen', 'adult', 'old'].forEach((ageStage) => {
+                let clone = this.characterCloneForSocietyLook(character, currentGender, ageStage)
+                let house = this.houseForPortraitCharacter(clone, society)
+                types[type][currentGender][ageStage] = this.generatedCharacterPortrait(clone, state, house)
+              })
+            })
+            if (!types[type].male.baby) {
+              ;['baby', 'teen', 'adult', 'old'].forEach((ageStage) => {
+                types[type].male[ageStage] = types[type][genders[0]][ageStage]
+              })
+            }
+            if (!types[type].female.baby) {
+              ;['baby', 'teen', 'adult', 'old'].forEach((ageStage) => {
+                types[type].female[ageStage] = types[type][genders[0]][ageStage]
+              })
+            }
+          })
+          try {
+            daapi.addCharacterLook({ group: 'cor_society', types })
+            targets.forEach((character) => {
+              this.applySocietyLookToCharacter(character, this.societyLookType(character))
+            })
+          } catch (err) {
+            console.warn(err)
+          }
+        },
+        characterCloneForSocietyLook(character, gender, ageStage) {
+          let originalLook = character.corSocietyOriginalLook || character.look || {}
+          return {
+            ...character,
+            gender,
+            isMale: gender === 'male',
+            look: {
+              ...originalLook,
+              gender,
+              ageStage
+            }
+          }
+        },
+        applySocietyLookToCharacter(character, type) {
+          let currentLook = character.look || {}
+          if (!character.corSocietyOriginalLook && currentLook.group !== 'cor_society') {
+            character.corSocietyOriginalLook = { ...currentLook }
+          }
+          let rawGender = character.gender || currentLook.gender || (character.isMale ? 'male' : 'female')
+          let gender = rawGender === 'female' ? 'female' : 'male'
+          let newLook = {
+            group: 'cor_society',
+            type,
+            gender,
+            isDAAPI: true
+          }
+          if (
+            currentLook.group === newLook.group &&
+            currentLook.type === newLook.type &&
+            currentLook.gender === newLook.gender &&
+            currentLook.isDAAPI === true
+          ) {
+            return
+          }
+          character.look = newLook
+          try {
+            daapi.updateCharacter({
+              characterId: character.id,
+              character: {
+                look: newLook,
+                corSocietyOriginalLook: character.corSocietyOriginalLook || {}
+              }
+            })
+            daapi.forceUpdateCharacterDisplay({ characterId: character.id })
+          } catch (err) {
+            console.warn(err)
+          }
+        },
+        restoreOriginalLookIfNeeded(character) {
+          if (!character || character.corSocietyGenerated || !character.corSocietyOriginalLook) {
+            return
+          }
+          let originalLook = character.corSocietyOriginalLook
+          character.look = originalLook
+          character.corSocietyOriginalLook = null
+          try {
+            daapi.updateCharacter({
+              characterId: character.id,
+              character: {
+                look: originalLook,
+                corSocietyOriginalLook: null
+              }
+            })
+            daapi.forceUpdateCharacterDisplay({ characterId: character.id })
+          } catch (err) {
+            console.warn(err)
+          }
+        },
+        societyLookType(character) {
+          return 'c_' + this.safeId(character.id || character.charHash || character.praenomen || 'unknown')
+        },
+        houseForPortraitCharacter(character, society) {
+          if (!character || !society || !society.houses) {
+            return false
+          }
+          if (character.dynastyId && society.houses[character.dynastyId]) {
+            return society.houses[character.dynastyId]
+          }
+          return false
+        },
+        allowAchievementsWithSociety(state) {
+          try {
+            if (!state || !state.current) {
+              return
+            }
+            if (state.current.flagUsedMods) {
+              state.current.flagUsedMods = false
+              state.current.flagSocietyAllowedAchievementsWithMods = true
+            }
+            if (state.settings) {
+              state.settings.enableAPIAchievements = true
+            }
+          } catch (err) {
+            console.warn(err)
+          }
         },
         classifyHouse(dynasty, members, strength, hasSenate) {
           let heritage = dynasty.heritage || ''
@@ -2242,8 +2409,8 @@
           let state = daapi.getState()
           let society = this.ensure()
           let counts = this.countByStratum(society)
-          let rivals = this.sortedHouses(society).filter((house) => house.rivalry || house.relation <= -55).length
-          let allies = this.sortedHouses(society).filter((house) => house.relation >= 55 || house.favor >= 2).length
+          let rivals = this.rivalHouses(society).length
+          let allies = this.alliedHouses(society).length
           let playerStatus = this.playerSocietyStatus(state)
           let message = [
             'Date: Year ' + state.year + ', month ' + ((state.month || 0) + 1),
@@ -2356,11 +2523,15 @@
         openRelations() {
           this.openAllies()
         },
-        openAllies() {
+        openAllies({ page } = {}) {
           let society = this.ensure()
           let state = daapi.getState()
-          let houses = this.sortedHouses(society).filter((house) => house.relation >= 45 || house.favor > 0)
-          let options = houses.slice(0, 10).map((house) => {
+          let houses = this.alliedHouses(society)
+          page = parseInt(page || 0, 10)
+          let pageSize = 10
+          let start = page * pageSize
+          let shown = houses.slice(start, start + pageSize)
+          let options = shown.map((house) => {
             return {
               text: this.houseOptionText(house),
               tooltip: this.houseTooltip(house),
@@ -2368,10 +2539,30 @@
               action: {
                 event: this.event,
                 method: 'openHouse',
-                context: { houseId: house.id }
+                context: { houseId: house.id, returnTo: 'allies', returnPage: page }
               }
             }
           })
+          if (start + pageSize < houses.length) {
+            options.push({
+              text: 'Next page',
+              action: {
+                event: this.event,
+                method: 'openAllies',
+                context: { page: page + 1 }
+              }
+            })
+          }
+          if (page > 0) {
+            options.push({
+              text: 'Previous page',
+              action: {
+                event: this.event,
+                method: 'openAllies',
+                context: { page: page - 1 }
+              }
+            })
+          }
           options.push({
             text: 'Back',
             action: {
@@ -2381,16 +2572,20 @@
           })
           this.pushModal({
             title: 'Allies and Patrons',
-            message: houses.length ? 'These houses currently support, favor, or owe your household.' : 'No allies, patrons, or favors yet.',
+            message: houses.length ? 'These houses currently support, favor, or owe your household.\nPage ' + (page + 1) + ' of ' + Math.max(1, Math.ceil(houses.length / pageSize)) + '.' : 'No allies, patrons, or favors yet.',
             image: this.affairIcon('support'),
             options
           })
         },
-        openRivals() {
+        openRivals({ page } = {}) {
           let society = this.ensure()
           let state = daapi.getState()
-          let houses = this.sortedHouses(society).filter((house) => house.relation <= -35 || house.rivalry)
-          let options = houses.slice(0, 10).map((house) => {
+          let houses = this.rivalHouses(society)
+          page = parseInt(page || 0, 10)
+          let pageSize = 10
+          let start = page * pageSize
+          let shown = houses.slice(start, start + pageSize)
+          let options = shown.map((house) => {
             return {
               text: this.houseOptionText(house),
               tooltip: this.houseTooltip(house),
@@ -2398,10 +2593,30 @@
               action: {
                 event: this.event,
                 method: 'openHouse',
-                context: { houseId: house.id }
+                context: { houseId: house.id, returnTo: 'rivals', returnPage: page }
               }
             }
           })
+          if (start + pageSize < houses.length) {
+            options.push({
+              text: 'Next page',
+              action: {
+                event: this.event,
+                method: 'openRivals',
+                context: { page: page + 1 }
+              }
+            })
+          }
+          if (page > 0) {
+            options.push({
+              text: 'Previous page',
+              action: {
+                event: this.event,
+                method: 'openRivals',
+                context: { page: page - 1 }
+              }
+            })
+          }
           options.push({
             text: 'Back',
             action: {
@@ -2411,7 +2626,7 @@
           })
           this.pushModal({
             title: 'Rival Houses',
-            message: houses.length ? 'These houses oppose, resent, or openly rival your household.' : 'No serious rivalries yet.',
+            message: houses.length ? 'These houses oppose, resent, or openly rival your household.\nPage ' + (page + 1) + ' of ' + Math.max(1, Math.ceil(houses.length / pageSize)) + '.' : 'No serious rivalries yet.',
             image: this.affairIcon('rivalry'),
             options
           })
@@ -2578,7 +2793,143 @@
           }
           this.openPlayerCrest()
         },
-        openHouse({ houseId }) {
+        openWardrobe() {
+          let state = daapi.getState()
+          let members = this.playerFamilyMembers(state).filter((character) => !character.isDead)
+          let options = members.slice(0, 14).map((character) => {
+            return {
+              text: this.characterName(character, state),
+              tooltip: this.characterTooltip(character, state) + '\nCurrent outfit: ' + this.outfitLabel(character.corSocietyOutfit || 'auto'),
+              icons: [this.characterPortrait(character, state)],
+              action: {
+                event: this.event,
+                method: 'openWardrobeCharacter',
+                context: { characterId: character.id }
+              }
+            }
+          })
+          options.push({ text: 'Close' })
+          this.pushModal({
+            title: 'Family Wardrobe',
+            message: 'Choose a household member. Available clothing follows your current Society order and the character age.',
+            image: daapi.requireImage('/cor_society/assets/prestige.svg'),
+            options
+          })
+        },
+        openWardrobeCharacter({ characterId } = {}) {
+          let state = daapi.getState()
+          let character = (state.characters || {})[characterId]
+          if (!character || this.playerFamilyMemberIds(state).indexOf(characterId) < 0) {
+            this.openWardrobe()
+            return
+          }
+          character.id = character.id || characterId
+          let outfits = this.wardrobeOptionsForCharacter(character, state)
+          let options = outfits.map((outfit) => {
+            return {
+              text: this.outfitLabel(outfit) + (character.corSocietyOutfit === outfit || (!character.corSocietyOutfit && outfit === 'auto') ? ' (current)' : ''),
+              tooltip: 'Visual clothing only. Does not change stats, class, genetics, or vanilla look data.',
+              icons: [this.characterPortraitWithOutfit(character, state, outfit)],
+              action: {
+                event: this.event,
+                method: 'applyWardrobeOutfit',
+                context: { characterId, outfit }
+              }
+            }
+          })
+          options.push({
+            text: 'Back',
+            action: {
+              event: this.event,
+              method: 'openWardrobe'
+            }
+          })
+          this.pushModal({
+            title: 'Wardrobe: ' + this.characterName(character, state),
+            message: 'Society order: ' + this.stratumTitle(this.playerStratum(state)) + '\nCurrent outfit: ' + this.outfitLabel(character.corSocietyOutfit || 'auto'),
+            image: this.characterPortrait(character, state),
+            options
+          })
+        },
+        applyWardrobeOutfit({ characterId, outfit } = {}) {
+          let state = daapi.getState()
+          let character = (state.characters || {})[characterId]
+          if (!character || this.playerFamilyMemberIds(state).indexOf(characterId) < 0) {
+            this.openWardrobe()
+            return
+          }
+          character.id = character.id || characterId
+          if (outfit && outfit !== 'auto') {
+            character.corSocietyOutfit = outfit
+          } else {
+            delete character.corSocietyOutfit
+          }
+          try {
+            daapi.updateCharacter({ characterId, character: { corSocietyOutfit: character.corSocietyOutfit || '' } })
+          } catch (err) {
+            console.warn(err)
+          }
+          if (!character.corSocietyOutfit && !character.corSocietyGenerated) {
+            this.restoreOriginalLookIfNeeded(character)
+          }
+          this.registerSocietyPortraitLooks(this.ensure(), daapi.getState())
+          try {
+            daapi.forceUpdateCharacterDisplay({ characterId })
+          } catch (err) {
+            console.warn(err)
+          }
+          this.openWardrobeCharacter({ characterId })
+        },
+        wardrobeOptionsForCharacter(character, state) {
+          let ageStage = this.characterAgeStage(this.age(character, state))
+          let gender = character.gender || ((character.look || {}).gender) || (character.isMale ? 'male' : 'female')
+          let stratum = this.playerStratum(state)
+          let role = this.characterPortraitRole(character, ageStage, stratum)
+          let options = ['auto'].concat(this.clothingOptions(gender, ageStage, role, stratum))
+          if (stratum === 'senatorial') {
+            options = options.concat(gender === 'female' ? ['palla', 'purplePalla', 'whiteStola'] : ['senatorToga', 'togaPraetexta', 'togaCandida'])
+          } else if (stratum === 'equestrian') {
+            options = options.concat(['equestrianTunic', 'citizenToga', 'mantle'])
+          } else if (stratum === 'poor' || stratum === 'freedmen') {
+            options = options.concat(['simpleTunic', 'workerTunic', 'brownMantle'])
+          } else {
+            options = options.concat(gender === 'female' ? ['stola', 'palla', 'whiteStola'] : ['citizenToga', 'whiteToga', 'mantle', 'simpleTunic'])
+          }
+          return options.filter((item, index, list) => item && list.indexOf(item) === index)
+        },
+        outfitLabel(outfit) {
+          let labels = {
+            auto: 'Automatic',
+            senatorToga: 'Senatorial toga',
+            togaPraetexta: 'Toga praetexta',
+            togaCandida: 'Toga candida',
+            citizenToga: 'Citizen toga',
+            whiteToga: 'Plain white toga',
+            equestrianTunic: 'Equestrian tunic',
+            mantle: 'Mantle',
+            simpleTunic: 'Simple tunic',
+            workerTunic: 'Worker tunic',
+            brownMantle: 'Brown mantle',
+            militaryCloak: 'Military cloak',
+            armoredTunic: 'Armored tunic',
+            redMantle: 'Red mantle',
+            stola: 'Stola',
+            whiteStola: 'White stola',
+            palla: 'Palla',
+            purplePalla: 'Purple palla',
+            childStola: 'Child stola',
+            childTunic: 'Child tunic'
+          }
+          return labels[outfit] || String(outfit || 'Automatic')
+        },
+        characterPortraitWithOutfit(character, state, outfit) {
+          if (!outfit || outfit === 'auto') {
+            return this.characterPortrait(character, state)
+          }
+          let clone = { ...character, corSocietyOutfit: outfit }
+          return this.generatedCharacterPortrait(clone, state)
+        },
+        openHouse({ houseId, returnTo, returnPage } = {}) {
           let society = this.ensure()
           let state = daapi.getState()
           let house = society.houses[houseId]
@@ -2592,6 +2943,7 @@
           let dinnerCost = this.actionCost(house, 'dinner')
           let canAsk = (house.favor || 0) > 0 || (house.relation || 0) >= 28
           let marriageInfo = this.marriageOptionInfo(society, state, house)
+          let nav = this.navContext(returnTo, returnPage)
           let message = [
             'Order: ' + profile.title,
             'Citizen rank: ' + (house.citizenRank || 'Unknown'),
@@ -2621,7 +2973,7 @@
                 action: {
                   event: this.event,
                   method: 'openMemberGroups',
-                  context: { houseId }
+                  context: { houseId, ...nav }
                 }
               },
               {
@@ -2634,7 +2986,7 @@
                 action: {
                   event: this.event,
                   method: 'openMarriageHousehold',
-                  context: { houseId }
+                  context: { houseId, ...nav }
                 }
               },
               {
@@ -2646,7 +2998,7 @@
                 action: {
                   event: this.event,
                   method: 'sendGift',
-                  context: { houseId }
+                  context: { houseId, ...nav }
                 }
               },
               {
@@ -2658,7 +3010,7 @@
                 action: {
                   event: this.event,
                   method: 'hostDinner',
-                  context: { houseId }
+                  context: { houseId, ...nav }
                 }
               },
               {
@@ -2671,7 +3023,7 @@
                 action: {
                   event: this.event,
                   method: 'askSupport',
-                  context: { houseId }
+                  context: { houseId, ...nav }
                 }
               },
               {
@@ -2683,7 +3035,7 @@
                 action: {
                   event: this.event,
                   method: 'tradeDeal',
-                  context: { houseId }
+                  context: { houseId, ...nav }
                 }
               },
               this.patronageOption(house),
@@ -2694,24 +3046,38 @@
                 action: {
                   event: this.event,
                   method: house.rivalry ? 'reconcile' : 'startRivalry',
-                  context: { houseId }
+                  context: { houseId, ...nav }
                 }
               },
               {
                 text: 'Back',
-                action: {
-                  event: this.event,
-                  method: 'openEstate',
-                  context: { stratum: house.stratum, page: 0 }
-                }
+                action: this.houseBackAction(house, returnTo, returnPage)
               }
             ].filter(Boolean)
           })
         },
-        openPeople({ houseId }) {
-          this.openMemberGroups({ houseId })
+        navContext(returnTo, returnPage) {
+          let nav = {}
+          if (returnTo) nav.returnTo = returnTo
+          if (returnPage !== undefined && returnPage !== null) nav.returnPage = returnPage
+          return nav
         },
-        openMemberGroups({ houseId }) {
+        houseBackAction(house, returnTo, returnPage) {
+          if (returnTo === 'allies') {
+            return { event: this.event, method: 'openAllies', context: { page: returnPage || 0 } }
+          }
+          if (returnTo === 'rivals') {
+            return { event: this.event, method: 'openRivals', context: { page: returnPage || 0 } }
+          }
+          if (returnTo === 'hub') {
+            return { event: this.event, method: 'openHub' }
+          }
+          return { event: this.event, method: 'openEstate', context: { stratum: house.stratum, page: 0 } }
+        },
+        openPeople({ houseId, returnTo, returnPage } = {}) {
+          this.openMemberGroups({ houseId, returnTo, returnPage })
+        },
+        openMemberGroups({ houseId, returnTo, returnPage } = {}) {
           let society = this.ensure()
           let state = daapi.getState()
           let house = society.houses[houseId]
@@ -2722,6 +3088,7 @@
           this.refreshHouseMemberLists(society, state, house)
           let groups = this.houseMemberGroups(house, state)
           let order = ['notable', 'established', 'common']
+          let nav = this.navContext(returnTo, returnPage)
           let options = order.map((group) => {
             let count = (groups[group] || []).length
             return {
@@ -2734,7 +3101,7 @@
               action: {
                 event: this.event,
                 method: 'openMemberGroup',
-                context: { houseId, group, page: 0 }
+                context: { houseId, group, page: 0, ...nav }
               }
             }
           })
@@ -2743,7 +3110,7 @@
             action: {
               event: this.event,
               method: 'openHouse',
-              context: { houseId }
+              context: { houseId, ...nav }
             }
           })
           this.pushModal({
@@ -2753,7 +3120,7 @@
             options
           })
         },
-        openMemberGroup({ houseId, group, page }) {
+        openMemberGroup({ houseId, group, page, returnTo, returnPage } = {}) {
           let society = this.ensure()
           let state = daapi.getState()
           let house = society.houses[houseId]
@@ -2769,6 +3136,7 @@
           let pageSize = 8
           let start = page * pageSize
           let shown = peopleIds.slice(start, start + pageSize)
+          let nav = this.navContext(returnTo, returnPage)
           let options = shown.map((characterId) => {
             let character = state.characters[characterId]
             return {
@@ -2778,7 +3146,7 @@
               action: {
                 event: this.event,
                 method: 'openPerson',
-                context: { houseId, characterId, group, page }
+                context: { houseId, characterId, group, page, ...nav }
               }
             }
           })
@@ -2788,7 +3156,7 @@
               action: {
                 event: this.event,
                 method: 'openMemberGroup',
-                context: { houseId, group, page: page + 1 }
+                context: { houseId, group, page: page + 1, ...nav }
               }
             })
           }
@@ -2798,7 +3166,7 @@
               action: {
                 event: this.event,
                 method: 'openMemberGroup',
-                context: { houseId, group, page: page - 1 }
+                context: { houseId, group, page: page - 1, ...nav }
               }
             })
           }
@@ -2807,7 +3175,7 @@
             action: {
               event: this.event,
               method: 'openMemberGroups',
-              context: { houseId }
+              context: { houseId, ...nav }
             }
           })
           this.pushModal({
@@ -2817,16 +3185,17 @@
             options
           })
         },
-        openPerson({ houseId, characterId, group, page }) {
+        openPerson({ houseId, characterId, group, page, returnTo, returnPage } = {}) {
           let society = this.ensure()
           let state = daapi.getState()
           let house = society.houses[houseId]
           let character = state.characters[characterId]
           if (!house || !character) {
-            this.openHouse({ houseId })
+            this.openHouse({ houseId, returnTo, returnPage })
             return
           }
           character.id = character.id || characterId
+          let nav = this.navContext(returnTo, returnPage)
           let vanillaActions = this.vanillaCharacterActions(character)
           let relatives = this.familyTreeRelatives(character, state)
           let message = [
@@ -2839,11 +3208,11 @@
           let backAction = group ? {
             event: this.event,
             method: 'openMemberGroup',
-            context: { houseId, group, page: page || 0 }
+            context: { houseId, group, page: page || 0, ...nav }
           } : {
             event: this.event,
             method: 'openMemberGroups',
-            context: { houseId }
+            context: { houseId, ...nav }
           }
           this.pushModal({
             title: this.characterName(character, state),
@@ -2860,7 +3229,7 @@
                 action: {
                   event: this.event,
                   method: 'openVanillaActions',
-                  context: { houseId, characterId, group, page: page || 0 }
+                  context: { houseId, characterId, group, page: page || 0, ...nav }
                 }
               },
               {
@@ -2871,7 +3240,7 @@
                 action: {
                   event: this.event,
                   method: 'openFamilyTree',
-                  context: { houseId, characterId, group, page: page || 0, mode: 'full' }
+                  context: { houseId, characterId, group, page: page || 0, mode: 'full', ...nav }
                 }
               },
               {
@@ -2913,16 +3282,17 @@
             ]
           })
         },
-        openVanillaActions({ houseId, characterId, group, page }) {
+        openVanillaActions({ houseId, characterId, group, page, returnTo, returnPage } = {}) {
           let society = this.ensure()
           let state = daapi.getState()
           let house = society.houses[houseId]
           let character = state.characters[characterId]
           if (!house || !character) {
-            this.openHouse({ houseId })
+            this.openHouse({ houseId, returnTo, returnPage })
             return
           }
           character.id = character.id || characterId
+          let nav = this.navContext(returnTo, returnPage)
           let actions = this.vanillaCharacterActions(character)
           let options = actions.map((item) => {
             let action = item.action || {}
@@ -2937,7 +3307,7 @@
               action: process || {
                 event: this.event,
                 method: 'openPerson',
-                context: { houseId, characterId, group, page: page || 0 }
+                context: { houseId, characterId, group, page: page || 0, ...nav }
               }
             }
           })
@@ -2946,7 +3316,7 @@
             action: {
               event: this.event,
               method: 'openPerson',
-              context: { houseId, characterId, group, page: page || 0 }
+              context: { houseId, characterId, group, page: page || 0, ...nav }
             }
           })
           this.pushModal({
@@ -2956,28 +3326,28 @@
             options
           })
         },
-        openVanillaKnownFamily({ houseId, characterId, group, page }) {
+        openVanillaKnownFamily({ houseId, characterId, group, page, returnTo, returnPage } = {}) {
           let society = this.ensure()
           let state = daapi.getState()
           let house = society.houses[houseId]
           if (this.preferSocietyTree(characterId, society, house, state)) {
-            this.openFamilyTree({ houseId, characterId, group, page, mode: 'known' })
+            this.openFamilyTree({ houseId, characterId, group, page, mode: 'known', returnTo, returnPage })
             return
           }
           if (!this.openVanillaFamilyRoute(characterId, '#/knownFamily')) {
-            this.openFamilyTree({ houseId, characterId, group, page, mode: 'known' })
+            this.openFamilyTree({ houseId, characterId, group, page, mode: 'known', returnTo, returnPage })
           }
         },
-        openVanillaFullFamilyTree({ houseId, characterId, group, page }) {
+        openVanillaFullFamilyTree({ houseId, characterId, group, page, returnTo, returnPage } = {}) {
           let society = this.ensure()
           let state = daapi.getState()
           let house = society.houses[houseId]
           if (this.preferSocietyTree(characterId, society, house, state)) {
-            this.openFamilyTree({ houseId, characterId, group, page, mode: 'full' })
+            this.openFamilyTree({ houseId, characterId, group, page, mode: 'full', returnTo, returnPage })
             return
           }
           if (!this.openVanillaFamilyRoute(characterId, '#/fullFamilyTree')) {
-            this.openFamilyTree({ houseId, characterId, group, page, mode: 'full' })
+            this.openFamilyTree({ houseId, characterId, group, page, mode: 'full', returnTo, returnPage })
           }
         },
         preferSocietyTree(characterId, society, house, state) {
@@ -3081,13 +3451,13 @@
             root.$store.state.characters
           )
         },
-        openFamilyTree({ houseId, characterId, group, page, mode }) {
+        openFamilyTree({ houseId, characterId, group, page, mode, returnTo, returnPage } = {}) {
           let society = this.ensure()
           let state = daapi.getState()
           let house = society.houses[houseId]
           let character = state.characters[characterId]
           if (!character) {
-            this.openHouse({ houseId })
+            this.openHouse({ houseId, returnTo, returnPage })
             return
           }
           character.id = character.id || characterId
@@ -3098,16 +3468,16 @@
           if (house) {
             this.refreshHouseMemberLists(society, state, house)
           }
-          this.openGraphicalFamilyTree({ society, state, house, houseId, characterId, group, page, mode })
+          this.openGraphicalFamilyTree({ society, state, house, houseId, characterId, group, page, mode, returnTo, returnPage })
         },
-        openGraphicalFamilyTree({ society, state, house, houseId, characterId, group, page, mode }) {
+        openGraphicalFamilyTree({ society, state, house, houseId, characterId, group, page, mode, returnTo, returnPage }) {
           if (typeof document === 'undefined' || !document.body) {
-            this.openTextFamilyTreeFallback({ society, state, house, houseId, characterId, group, page, mode })
+            this.openTextFamilyTreeFallback({ society, state, house, houseId, characterId, group, page, mode, returnTo, returnPage })
             return
           }
           let character = state.characters[characterId]
           if (!character) {
-            this.openHouse({ houseId })
+            this.openHouse({ houseId, returnTo, returnPage })
             return
           }
           character.id = character.id || characterId
@@ -3133,7 +3503,7 @@
           backButton.title = 'Return to the selected Society character.'
           backButton.addEventListener('click', () => {
             this.closeFamilyTreeOverlay()
-            this.openPerson({ houseId, characterId, group, page: page || 0 })
+            this.openPerson({ houseId, characterId, group, page: page || 0, returnTo, returnPage })
           })
           header.appendChild(backButton)
 
@@ -3205,7 +3575,9 @@
             fallbackHouse: house,
             depth: 0,
             depthLimit,
-            visited: {}
+            visited: {},
+            returnTo,
+            returnPage
           })
           zoomTarget.appendChild(branch)
 
@@ -3333,7 +3705,7 @@
           }
           return current && current.id ? current.id : characterId
         },
-        createFamilyTreeBranch({ rootId, focusId, state, society, fallbackHouse, depth, depthLimit, visited }) {
+        createFamilyTreeBranch({ rootId, focusId, state, society, fallbackHouse, depth, depthLimit, visited, returnTo, returnPage }) {
           let character = state.characters[rootId]
           let branch = document.createElement('div')
           branch.className = 'cor-society-tree-family'
@@ -3358,9 +3730,9 @@
 
           let couple = document.createElement('div')
           couple.className = 'cor-society-tree-couple' + (children.length ? ' has-children' : '')
-          couple.appendChild(this.createFamilyTreeCharacterCard(character, state, society, fallbackHouse, this.treeRoleLabel(character, focusId, depth, false), focusId))
+          couple.appendChild(this.createFamilyTreeCharacterCard(character, state, society, fallbackHouse, this.treeRoleLabel(character, focusId, depth, false), focusId, returnTo, returnPage))
           if (spouse && !this.sameCharacterId(spouse.id, character.id)) {
-            couple.appendChild(this.createFamilyTreeCharacterCard(spouse, state, society, fallbackHouse, this.treeRoleLabel(spouse, focusId, depth, true), focusId))
+            couple.appendChild(this.createFamilyTreeCharacterCard(spouse, state, society, fallbackHouse, this.treeRoleLabel(spouse, focusId, depth, true), focusId, returnTo, returnPage))
           }
           branch.appendChild(couple)
 
@@ -3376,14 +3748,16 @@
                 fallbackHouse,
                 depth: depth + 1,
                 depthLimit,
-                visited
+                visited,
+                returnTo,
+                returnPage
               }))
             })
             branch.appendChild(childrenWrap)
           }
           return branch
         },
-        createFamilyTreeCharacterCard(character, state, society, fallbackHouse, role, focusId) {
+        createFamilyTreeCharacterCard(character, state, society, fallbackHouse, role, focusId, returnTo, returnPage) {
           let house = this.treeHouseForCharacter(character, society, fallbackHouse)
           let card = document.createElement('button')
           card.type = 'button'
@@ -3406,7 +3780,9 @@
               characterId: character.id,
               group: '',
               page: 0,
-              mode: 'full'
+              mode: 'full',
+              returnTo,
+              returnPage
             })
           })
 
@@ -3509,10 +3885,10 @@
             return (first.birthYear || 0) - (second.birthYear || 0)
           })
         },
-        openTextFamilyTreeFallback({ society, state, house, houseId, characterId, group, page, mode }) {
+        openTextFamilyTreeFallback({ society, state, house, houseId, characterId, group, page, mode, returnTo, returnPage }) {
           let character = state.characters[characterId]
           if (!character) {
-            this.openHouse({ houseId })
+            this.openHouse({ houseId, returnTo, returnPage })
             return
           }
           character.id = character.id || characterId
@@ -3532,23 +3908,24 @@
             { label: 'Spouse', id: character.spouseId }
           ].forEach((relative) => {
             if (relative.id && state.characters[relative.id]) {
-              relativeOptions.push(this.familyRelativeOption(relative.label, relative.id, state, society, houseId))
+              relativeOptions.push(this.familyRelativeOption(relative.label, relative.id, state, society, houseId, returnTo, returnPage))
             }
           })
           relatives.children.slice(0, 8).forEach((relativeId) => {
-            relativeOptions.push(this.familyRelativeOption('Child', relativeId, state, society, houseId))
+            relativeOptions.push(this.familyRelativeOption('Child', relativeId, state, society, houseId, returnTo, returnPage))
           })
           relatives.siblings.slice(0, 4).forEach((relativeId) => {
-            relativeOptions.push(this.familyRelativeOption('Sibling', relativeId, state, society, houseId))
+            relativeOptions.push(this.familyRelativeOption('Sibling', relativeId, state, society, houseId, returnTo, returnPage))
           })
+          let nav = this.navContext(returnTo, returnPage)
           let backAction = group ? {
             event: this.event,
             method: 'openPerson',
-            context: { houseId, characterId, group, page: page || 0 }
+            context: { houseId, characterId, group, page: page || 0, ...nav }
           } : {
             event: this.event,
             method: 'openPerson',
-            context: { houseId, characterId }
+            context: { houseId, characterId, ...nav }
           }
           relativeOptions.push({
             text: 'Back',
@@ -4288,6 +4665,18 @@
             return String(a.name || '').localeCompare(String(b.name || ''))
           })
         },
+        alliedHouses(society) {
+          return this.sortedHouses(society).filter((house) => this.isAlliedHouse(house))
+        },
+        rivalHouses(society) {
+          return this.sortedHouses(society).filter((house) => this.isRivalHouse(house))
+        },
+        isAlliedHouse(house) {
+          return !!(house && ((house.relation || 0) >= 45 || (house.favor || 0) > 0))
+        },
+        isRivalHouse(house) {
+          return !!(house && ((house.relation || 0) <= -35 || house.rivalry))
+        },
         houseOptionText(house) {
           let marker = house.rivalry ? 'Rival ' : (house.relation >= 55 ? 'Ally ' : '')
           return marker + house.name + ' (' + this.signed(house.relation || 0) + ')'
@@ -4914,6 +5303,9 @@
           ].join('\n')
         },
         characterPortrait(character, state, house) {
+          if (character && character.corSocietyOutfit) {
+            return this.generatedCharacterPortrait(character, state, house)
+          }
           if (this.isSocietyGeneratedCharacter(character, house)) {
             return this.generatedCharacterPortrait(character, state, house)
           }
@@ -4965,10 +5357,12 @@
           let look = character.look || {}
           let seed = String(character.id || character.praenomen || Math.random()) + '-' + String(character.charHash || '')
           let random = this.seededRandom(seed)
-          let type = look.type || this.pickByRandom(['brown', 'brown_curly', 'dusky', 'olive', 'tan', 'hazel', 'auburn', 'blonde', 'black'], random)
+          let originalLook = character.corSocietyOriginalLook || {}
+          let type = look.group === 'cor_society' ? (originalLook.type || '') : (look.type || '')
+          type = type || this.pickByRandom(['brown', 'brown_curly', 'dusky', 'olive', 'tan', 'hazel', 'auburn', 'blonde', 'black'], random)
           let gender = character.gender || look.gender || (character.isMale ? 'male' : 'female')
           let age = this.age(character, state)
-          let ageStage = this.characterAgeStage(age)
+          let ageStage = look.ageStage || this.characterAgeStage(age)
           let palette = this.portraitPalette(type)
           let eyeColor = this.eyeColorForType(type)
           let stratum = (house && house.stratum) || ''
@@ -4980,7 +5374,7 @@
           if (age > 58 && random() > 0.45) {
             palette.hair = '#c7c0ad'
           }
-          let clothing = this.pickByRandom(this.clothingOptions(gender, ageStage, role, stratum), random)
+          let clothing = character.corSocietyOutfit || this.pickByRandom(this.clothingOptions(gender, ageStage, role, stratum), random)
           let headwear = this.pickByRandom(this.headwearOptions(gender, ageStage, role, stratum), random)
           let facialHair = 'none'
           let faceShape = this.pickByRandom(['round', 'oval', 'long', 'square'], random)
@@ -5373,7 +5767,7 @@
           }
           return ''
         },
-        familyRelativeOption(label, characterId, state, society, fallbackHouseId) {
+        familyRelativeOption(label, characterId, state, society, fallbackHouseId, returnTo, returnPage) {
           let character = state.characters[characterId]
           character.id = character.id || characterId
           let houseId = this.houseIdForCharacter(character, state, society) || fallbackHouseId
@@ -5385,7 +5779,7 @@
             action: {
               event: this.event,
               method: 'openFamilyTree',
-              context: { houseId, characterId: character.id }
+              context: { houseId, characterId: character.id, returnTo, returnPage, mode: 'full' }
             }
           }
         },
@@ -5416,15 +5810,18 @@
         startPlayerStatusOverlay() {
           if (this.playerStatusOverlayStarted) {
             this.applyPlayerStatusOverlay()
+            this.applyPortraitOverlays()
             return
           }
           this.playerStatusOverlayStarted = true
           this.applyPlayerStatusOverlay()
+          this.applyPortraitOverlays()
           if (typeof window !== 'undefined' && window.setInterval) {
             window.setInterval(() => {
               try {
                 if (window.corSociety) {
                   window.corSociety.applyPlayerStatusOverlay()
+                  window.corSociety.applyPortraitOverlays()
                 }
               } catch (err) {
                 console.warn(err)
@@ -5470,6 +5867,66 @@
             }
           }
           return false
+        },
+        applyPortraitOverlays() {
+          if (typeof document === 'undefined') {
+            return
+          }
+          let state = daapi.getState()
+          if (!state || !state.characters) {
+            return
+          }
+          this.applyCurrentCharacterPortraitOverlay(state)
+          this.applyAttributedCharacterPortraitOverlays(state)
+        },
+        applyCurrentCharacterPortraitOverlay(state) {
+          let currentId = this.currentCharacterId(state)
+          let character = state.characters[currentId]
+          if (!this.shouldUseSocietyPortrait(character)) {
+            return
+          }
+          let img = this.findCurrentPortraitImage(state)
+          if (!img) {
+            return
+          }
+          this.replacePortraitImage(img, character, state)
+        },
+        applyAttributedCharacterPortraitOverlays(state) {
+          let images = Array.prototype.slice.call(document.querySelectorAll('img[data-character-id], img[data-characterid], img[data-character], img[data-id], [data-character-id] img, [data-characterid] img, [data-character] img, [data-id] img'))
+          images.forEach((img) => {
+            let id = this.characterIdFromElement(img)
+            let character = id && state.characters[id]
+            if (this.shouldUseSocietyPortrait(character)) {
+              this.replacePortraitImage(img, character, state)
+            }
+          })
+        },
+        shouldUseSocietyPortrait(character) {
+          return !!(character && (character.corSocietyOutfit || character.corSocietyGenerated))
+        },
+        characterIdFromElement(element) {
+          let node = element
+          while (node && node !== document.body) {
+            if (node.getAttribute) {
+              let value = node.getAttribute('data-character-id') || node.getAttribute('data-characterid') || node.getAttribute('data-character') || node.getAttribute('data-id')
+              if (value) {
+                return value
+              }
+            }
+            node = node.parentElement
+          }
+          return ''
+        },
+        replacePortraitImage(img, character, state) {
+          let portrait = this.characterPortrait(character, state)
+          if (!portrait || img.getAttribute('data-cor-society-portrait-src') === portrait) {
+            return
+          }
+          if (!img.getAttribute('data-cor-society-original-src')) {
+            img.setAttribute('data-cor-society-original-src', img.getAttribute('src') || img.src || '')
+          }
+          img.setAttribute('data-cor-society-portrait-src', portrait)
+          img.src = portrait
         },
         startPlayerCrestOverlay() {
           if (this.playerCrestOverlayStarted) {
@@ -5560,12 +6017,12 @@
           if (!character) {
             return false
           }
-          let portrait = this.characterPortrait(character, state)
+          let portrait = this.vanillaCharacterPortrait(character, state)
           let exact = []
           let images = Array.prototype.slice.call(document.querySelectorAll('img'))
           images.forEach((img) => {
             let src = img.getAttribute('src') || img.src || ''
-            if (src === portrait || img.src === portrait) {
+            if (portrait && (src === portrait || img.src === portrait)) {
               exact.push(img)
             }
           })
@@ -5720,11 +6177,11 @@
     openRelations() {
       window.corSociety.openRelations()
     },
-    openAllies() {
-      window.corSociety.openAllies()
+    openAllies(args) {
+      window.corSociety.openAllies(args || {})
     },
-    openRivals() {
-      window.corSociety.openRivals()
+    openRivals(args) {
+      window.corSociety.openRivals(args || {})
     },
     openLog(args) {
       window.corSociety.openLog(args || {})
@@ -5743,6 +6200,15 @@
     },
     togglePlayerCrestOverlay() {
       window.corSociety.togglePlayerCrestOverlay()
+    },
+    openWardrobe() {
+      window.corSociety.openWardrobe()
+    },
+    openWardrobeCharacter(args) {
+      window.corSociety.openWardrobeCharacter(args || {})
+    },
+    applyWardrobeOutfit(args) {
+      window.corSociety.applyWardrobeOutfit(args || {})
     },
     openHouse(args) {
       window.corSociety.openHouse(args || {})
