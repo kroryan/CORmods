@@ -14,6 +14,7 @@ Roman Society adds a living social layer to Citizen of Rome.
 - Generates persistent Roman-style house shields for the player and every known NPC house.
 - Adds a separate global `House Shield` action for editing the player's shield without cluttering the Society menus.
 - Adds a global `Family Wardrobe` action with its own wardrobe icon for changing household clothing, with outfit availability tied to the player's Society order.
+- Bundles compatible standalone actions inside Society so they do not need separate installation: Play As, Attempt Murder, animal stealing events, Disinherit, Restore Inheritance, and optional desktop DevTools access.
 - Tracks persistent relationships, favors, rivalries, patronage, trade ties, allies, rivals, and past affairs.
 - Splits allies/patrons and rivals into separate paged menus with matching overview counts and contextual Back navigation.
 - Shows past affairs as paged notification-style entries with their own event icons.
@@ -67,3 +68,9 @@ Each month, houses pursue their own agenda. Some affairs only change the social 
 Roman Society does not use `setCurrentCharacter` and does not take control away from the human player. Vanilla family screens are opened by setting the game's `selectedCharacterId`, which selects the tree being viewed without changing the current playable character. NPC houses are simulated by the mod as separate virtual players, marked internally as `cor_society_ai`; they can rise or fall between social orders as their simulated wealth, power, and stability change.
 
 The base game blocks external platform achievements when `current.flagUsedMods` is true. Society clears that mod-used flag during its own tick so achievements can remain available while using this mod, but vanilla easy mode and sandbox mode still block achievements.
+
+## Bundled Mod Credits
+
+The bundled Play As, Murder, Stealing From, and Open DevTools snippets in `bundled/` are from `CitizenOfRomeDynastyAscendant` / the Citizen of Rome example mod ecosystem and are included here with route and asset paths adapted so Roman Society can ship as one installable package.
+
+The Disinheritance and Restore Inheritance actions are bundled from the local `CORmods` versions and adapted to run from inside Roman Society.

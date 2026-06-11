@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<svg version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" 
+     viewBox="0 0 512 512">
+  <!-- Documento base -->
+  <rect x="96" y="56" width="320" height="400" rx="20" fill="#FFE3A8"/>
+  <rect x="136" y="96" width="240" height="30" rx="5" fill="#E1B464"/>
+  <rect x="136" y="146" width="180" height="30" rx="5" fill="#E1B464"/>
+  <rect x="136" y="196" width="210" height="30" rx="5" fill="#E1B464"/>
+  
+  <!-- Símbolo de moneda tachado -->
+  <circle cx="256" cy="300" r="80" fill="#FFD782"/>
+  <text x="256" y="330" font-family="Arial" font-size="80" text-anchor="middle" fill="#E1B464">₮</text>
+  
+  <!-- X roja de cancelación -->
+  <g transform="translate(256,256) scale(0.8)">
+    <circle cx="0" cy="0" r="120" fill="#FF6B6B" opacity="0.9"/>
+    <path d="M-60,-60 L60,60 M-60,60 L60,-60" stroke="white" stroke-width="30" stroke-linecap="round"/>
+  </g>
+  
+  <!-- Sello -->
+  <circle cx="350" cy="400" r="40" fill="#E1B464"/>
+  <path d="M330,400 L370,400 M350,380 L350,420" stroke="#FFE3A8" stroke-width="5"/>
+</svg>

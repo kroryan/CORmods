@@ -1,0 +1,1 @@
+['/cor_society/bundled/murder/main', '/cor_society/bundled/murder/targetDiedNaturally', '/cor_society/bundled/murder/attemptViaBandits']

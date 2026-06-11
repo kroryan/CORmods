@@ -1,1 +1,10 @@
-['/cor_society/main']
+[
+  '/cor_society/main',
+  '/cor_society/bundled/play_as/main',
+  '/cor_society/bundled/murder/main',
+  '/cor_society/bundled/murder/targetDiedNaturally',
+  '/cor_society/bundled/murder/attemptViaBandits',
+  '/cor_society/bundled/stealingFrom/stealingFrom',
+  '/cor_society/bundled/disinheritance/main',
+  '/cor_society/bundled/restoreInheritance/main'
+]

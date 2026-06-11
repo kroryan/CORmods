@@ -41,6 +41,21 @@
         }
       }
     })
+    if (daapi.openDevTools) {
+      daapi.addGlobalAction({
+        key: 'cor_society_open_devtools',
+        action: {
+          title: 'Open DevTools',
+          tooltip: 'Opens the game developer console when this platform supports daapi.openDevTools.',
+          icon: daapi.requireImage('/cor_society/icon.svg'),
+          isAvailable: true,
+          process: {
+            event: '/cor_society/bundled/opendev/openDevTools',
+            method: 'open'
+          }
+        }
+      })
+    }
     try {
       daapi.invokeMethod({
         event: '/cor_society/engine',
@@ -76,7 +91,7 @@
   },
   methods: {
     boot() {
-      if (window.corSociety && window.corSociety.version === '1.1.12') {
+      if (window.corSociety && window.corSociety.version === '1.1.13') {
         window.corSociety.ensure()
         window.corSociety.startPlayerCrestOverlay()
         window.corSociety.startPlayerStatusOverlay()
@@ -84,7 +99,7 @@
       }
 
       window.corSociety = {
-        version: '1.1.12',
+        version: '1.1.13',
         event: '/cor_society/engine',
         flag: 'corSocietyState',
         noticeFlag: 'corSocietyInstallNoticeSeen',

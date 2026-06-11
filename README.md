@@ -52,11 +52,12 @@ A social simulation layer inspired by court and dynasty politics. It uses existi
 - Adds a "Roman Society" global action without adding a separate character action
 - Adds a separate "House Shield" global action for configuring the player's house shield
 - Adds a "Family Wardrobe" global action for Society portrait clothing on household members, with outfit availability tied to social order
+- Bundles Play As, Murder, Stealing From, Disinherit, Restore Inheritance, and optional Open DevTools helpers so Roman Society can be installed as one package
 - Groups houses into senatorial, equestrian, civic, plebeian, freedman, and poor orders
 - Seeds generated houses with real game characters at startup, including visible family members, spouse links, and children where age makes sense
 - Prefers young adult generated founders and gives generated people dead parents when missing, so trees have roots while living member lists stay clean
 - Uses social-order icons, separate paged Allies/Patrons and Rivals menus with matching overview counts, and paged Past Affairs displayed as individual notification-style entries
-- Lets the player inspect houses and every known living dynasty member through Notables, Established members, and Common kin, with vanilla portraits for vanilla people, stable Society portraits for generated people, and generated Roman-style house shields
+- Lets the player inspect houses and every known living dynasty member through Notables, Established members, and Common kin, with vanilla-based portraits and generated Roman-style house shields
 - Adds one "Full family tree" action per Society character, opening a graphical Society tree with portrait cards, spouse links, child branches, zoom, centering, stable Back navigation, and dark/light theme detection
 - Exposes vanilla / other mod character actions when a character currently has them
 - Generated Society characters receive vanilla Citizen of Rome traits through the game's trait API
@@ -71,3 +72,6 @@ A social simulation layer inspired by court and dynasty politics. It uses existi
 - Produces player-facing events such as office campaigns, marriage alliances, inheritance disputes, trade ventures, scandals, petitions, and slander
 - Applies real effects through cash, prestige, influence, favors, relations, and revenue modifiers without a permanent monthly rival-pressure penalty
 - Clears the base game's `flagUsedMods` achievement blocker during Society ticks so platform achievements can remain available with Society active; easy mode and sandbox mode still block them
+
+**Bundled Credits:**
+The Play As, Murder, Stealing From, and Open DevTools snippets bundled inside Roman Society come from `CitizenOfRomeDynastyAscendant` / the Citizen of Rome example mod ecosystem, with paths adapted so they work from inside the Society package. The Disinheritance and Restore Inheritance helpers are bundled from the local CORmods versions.
