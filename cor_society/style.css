@@ -34,6 +34,7 @@
   background: rgba(24, 20, 16, 0.62);
 }
 
+.cor-society-family-tree-overlay.cor-society-theme-dark,
 [data-bs-theme="dark"] .cor-society-family-tree-overlay,
 .theme-dark .cor-society-family-tree-overlay,
 .dark .cor-society-family-tree-overlay,
@@ -50,6 +51,18 @@
   --cor-society-tree-header: #171512;
   --cor-society-tree-header-text: #f8f4ec;
   --cor-society-tree-active-border: #d7b85c;
+}
+
+.cor-society-family-tree-overlay.cor-society-theme-dark .cor-society-tree-toolbar-button.btn-light {
+  color: var(--cor-society-tree-text);
+  background: #332f2a;
+  border-color: var(--cor-society-tree-border);
+}
+
+.cor-society-family-tree-overlay.cor-society-theme-dark .cor-society-tree-toolbar-button.btn-light:hover,
+.cor-society-family-tree-overlay.cor-society-theme-dark .cor-society-tree-toolbar-button.btn-light:focus {
+  color: #fff7ea;
+  background: #463f35;
 }
 
 .cor-society-family-tree-panel {

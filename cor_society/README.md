@@ -19,7 +19,7 @@ Roman Society adds a living social layer to Citizen of Rome.
 - Uses copied vanilla interface icons for social orders and Society actions where the mod API allows local assets.
 - Lets the player inspect every known living dynasty member through Notables, Established members, and Common kin.
 - Lets the player interact with houses and characters, including Society actions plus vanilla / other mod character actions when the game exposes them.
-- Adds character family navigation: Society-generated characters use a graphical Society family tree with portrait cards, spouse links, children branches, zoom, centering, and stable Back navigation; vanilla characters can still use the game's known-family/full-tree routes.
+- Adds character family navigation through one `Full family tree` button, using a graphical Society family tree with portrait cards, spouse links, children branches, zoom, centering, stable Back navigation, and dark/light theme detection.
 - Lets the player arrange marriages between unmarried adults from their household and NPC houses using the game's marriage API.
 - Includes the current player character as a marriage candidate when they are unmarried, so starts without a spouse and sudden succession cases can still use Society marriages.
 - Shows short parenthesized reasons when marriage is unavailable, such as no adult, too high, too low, or required relation.

@@ -63,7 +63,7 @@
   },
   methods: {
     boot() {
-      if (window.corSociety && window.corSociety.version === '1.1.9') {
+      if (window.corSociety && window.corSociety.version === '1.1.10') {
         window.corSociety.ensure()
         window.corSociety.startPlayerCrestOverlay()
         window.corSociety.startPlayerStatusOverlay()
@@ -71,7 +71,7 @@
       }
 
       window.corSociety = {
-        version: '1.1.9',
+        version: '1.1.10',
         event: '/cor_society/engine',
         flag: 'corSocietyState',
         noticeFlag: 'corSocietyInstallNoticeSeen',
@@ -2865,34 +2865,13 @@
               },
               {
                 variant: 'info',
-                text: 'Known family',
-                tooltip: 'Open the vanilla known-family screen when the game route accepts external navigation.',
-                icons: [this.affairIcon('familyTree')],
-                action: {
-                  event: this.event,
-                  method: 'openVanillaKnownFamily',
-                  context: { houseId, characterId, group, page: page || 0 }
-                }
-              },
-              {
-                variant: 'info',
                 text: 'Full family tree',
-                tooltip: 'Open the vanilla full family tree when the game route accepts external navigation.',
-                icons: [this.affairIcon('familyTree')],
-                action: {
-                  event: this.event,
-                  method: 'openVanillaFullFamilyTree',
-                  context: { houseId, characterId, group, page: page || 0 }
-                }
-              },
-              {
-                text: 'Graphical family tree',
-                tooltip: 'Open the Society graphical family tree using real spouse, parent, and child IDs.',
+                tooltip: 'Open the full Society family tree using real spouse, parent, and child IDs.',
                 icons: [this.affairIcon('familyTree')],
                 action: {
                   event: this.event,
                   method: 'openFamilyTree',
-                  context: { houseId, characterId, group, page: page || 0 }
+                  context: { houseId, characterId, group, page: page || 0, mode: 'full' }
                 }
               },
               {
@@ -3137,6 +3116,7 @@
           overlay.id = 'corSocietyFamilyTreeOverlay'
           overlay.className = 'cor-society-family-tree-overlay'
           overlay.setAttribute('data-cor-society-ui', 'family-tree')
+          this.applyFamilyTreeTheme(overlay, state)
 
           let panel = document.createElement('div')
           panel.className = 'cor-society-family-tree-panel container-main break-word'
@@ -3261,6 +3241,59 @@
           if (overlay && overlay.parentNode) {
             overlay.parentNode.removeChild(overlay)
           }
+        },
+        applyFamilyTreeTheme(overlay, state) {
+          let dark = this.isGameDarkTheme(state)
+          overlay.classList.toggle('cor-society-theme-dark', dark)
+          overlay.classList.toggle('cor-society-theme-light', !dark)
+          overlay.setAttribute('data-cor-society-theme', dark ? 'dark' : 'light')
+        },
+        isGameDarkTheme(state) {
+          state = state || daapi.getState()
+          if (state && state.settings && typeof state.settings.darkMode === 'boolean') {
+            return state.settings.darkMode
+          }
+          if (typeof document !== 'undefined') {
+            let probes = [document.documentElement, document.body, document.getElementById('app')].filter(Boolean)
+            for (let i = 0; i < probes.length; i += 1) {
+              let probe = probes[i]
+              let marker = ((probe.getAttribute('data-bs-theme') || '') + ' ' + (probe.className || '')).toLowerCase()
+              if (marker.indexOf('dark') >= 0 || marker.indexOf('night') >= 0) return true
+              if (marker.indexOf('light') >= 0) return false
+            }
+            let bg = this.firstOpaqueBackground(probes)
+            if (bg) {
+              return this.colorLuminance(bg) < 115
+            }
+          }
+          if (typeof window !== 'undefined' && window.matchMedia) {
+            try {
+              return !!window.matchMedia('(prefers-color-scheme: dark)').matches
+            } catch (err) {
+              return false
+            }
+          }
+          return false
+        },
+        firstOpaqueBackground(elements) {
+          for (let i = 0; i < elements.length; i += 1) {
+            let style = window.getComputedStyle(elements[i])
+            let bg = style && style.backgroundColor
+            if (bg && bg !== 'transparent' && bg !== 'rgba(0, 0, 0, 0)') {
+              return bg
+            }
+          }
+          return ''
+        },
+        colorLuminance(color) {
+          let match = String(color || '').match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/i)
+          if (!match) {
+            return 255
+          }
+          let r = parseInt(match[1], 10)
+          let g = parseInt(match[2], 10)
+          let b = parseInt(match[3], 10)
+          return (0.2126 * r) + (0.7152 * g) + (0.0722 * b)
         },
         familyTreeTitle(mode) {
           if (mode === 'known') return 'Known Family Tree'
