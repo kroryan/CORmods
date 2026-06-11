@@ -9,6 +9,9 @@ Offline-cache translator mod for Citizen of Rome.
 - Translates visible game text with Google Translate while online.
 - Saves each `English text -> translated text` pair in the browser/game local cache.
 - Reuses the saved cache offline after the text has been learned once.
+- Hooks both interaction modal queues used by the game, including normal modals and button-style event notifications.
+- Pretranslates uncached modal text before display while online learning is available, so first-time event popups are more likely to appear translated instead of waiting for the next scan.
+- Splits long notification/event text into sentence-sized chunks before sending it to Google Translate, then caches those chunks for offline reuse.
 - Hooks interaction modal payloads before they are shown, so titles, messages, dropdown labels, option text, and long-press tooltips can be learned and replaced more uniformly.
 - Reuses cached fragments inside multiline and dynamic mod menus, including label/value lines, numbered consequence lists, and short parenthesized reasons.
 - Includes 5 minute and 20 minute intensive scan buttons.
@@ -16,7 +19,7 @@ Offline-cache translator mod for Citizen of Rome.
 
 ## Important limit
 
-The mod can only translate text that the game has loaded into the page. It cannot guarantee every possible event, future popup, or hidden route is translated unless those texts appear while the mod is in online learning mode, or unless you import a cache that already contains them.
+The mod can only translate text that the game has loaded or is about to show in a modal. It cannot guarantee every possible event, future popup, or hidden route is translated unless those texts appear while the mod is in online learning mode, or unless you import a cache that already contains them.
 
 ## Recommended use
 
