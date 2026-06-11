@@ -259,7 +259,11 @@
             this.prepareModalPayloadAsync(payload)
               .catch((err) => {
                 this.noteError('Modal pretranslation failed: ' + err.message)
-                this.prepareModalPayload(payload)
+                try {
+                  this.prepareModalPayload(payload)
+                } catch (fallbackErr) {
+                  this.noteError('Modal fallback translation failed: ' + fallbackErr.message)
+                }
               })
               .then(() => {
                 original.call(thisArg, payload)
