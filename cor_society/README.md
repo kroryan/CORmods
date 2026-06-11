@@ -15,7 +15,9 @@ Roman Society adds a living social layer to Citizen of Rome.
 - Tracks persistent relationships, favors, rivalries, patronage, trade ties, and recent affairs.
 - Lets the player interact with houses and notable characters.
 - Lets the player arrange marriages between unmarried adults from their household and NPC houses using the game's marriage API.
+- Includes the current player character as a marriage candidate when they are unmarried, so starts without a spouse and sudden succession cases can still use Society marriages.
 - Shows short parenthesized reasons when marriage is unavailable, such as no adult, too high, too low, or required relation.
+- Adds native button tooltips to Society menus and event popups so long-pressing/holding an option shows the expected consequences before confirming it.
 - Restricts marriages by order: one order down, same order, one order up, or two orders up with very high relations.
 - Applies real game effects through cash, prestige, influence, revenue modifiers, and monthly events.
 - Lets houses play their own monthly social game through wealth, power, stability, agendas, family events, and inter-house relationships.

@@ -6,6 +6,7 @@
       key: 'cor_society',
       action: {
         title: 'Roman Society',
+        tooltip: 'Opens the Society overview. Consequences: no stats change until you choose an action inside.',
         icon: daapi.requireImage('/cor_society/icon.svg'),
         isAvailable: true,
         process: {
@@ -18,6 +19,7 @@
       key: 'cor_society_player_crest',
       action: {
         title: 'House Shield',
+        tooltip: 'Opens player house shield settings. Consequences: visual shield changes only; no stats change.',
         icon: daapi.requireImage('/cor_society/shield.svg'),
         isAvailable: true,
         process: {
@@ -61,14 +63,14 @@
   },
   methods: {
     boot() {
-      if (window.corSociety && window.corSociety.version === '1.1.0') {
+      if (window.corSociety && window.corSociety.version === '1.1.2') {
         window.corSociety.ensure()
         window.corSociety.startPlayerCrestOverlay()
         return
       }
 
       window.corSociety = {
-        version: '1.1.0',
+        version: '1.1.2',
         event: '/cor_society/engine',
         flag: 'corSocietyState',
         noticeFlag: 'corSocietyInstallNoticeSeen',
@@ -202,7 +204,7 @@
             return
           }
           daapi.setGlobalFlag({ flag: this.noticeFlag, data: true })
-          daapi.pushInteractionModalQueue({
+          this.pushModal({
             title: 'Roman Society loaded',
             message: 'Roman Society is active. It adds social orders, houses, virtual-player families, monthly family affairs, alliances, rivalries, patronage, trade, scandals, petitions, and political support.',
             image: daapi.requireImage('/cor_society/icon.svg'),
@@ -265,6 +267,146 @@
         save(society) {
           daapi.setGlobalFlag({ flag: this.flag, data: society })
         },
+        pushModal(payload) {
+          payload = payload || {}
+          payload.options = this.decorateModalOptions(payload.options || [], payload)
+          daapi.pushInteractionModalQueue(payload)
+        },
+        decorateModalOptions(options, payload) {
+          return (options || []).map((option) => this.decorateModalOption(option, payload)).filter(Boolean)
+        },
+        decorateModalOption(option, payload) {
+          if (!option || typeof option !== 'object') {
+            return option
+          }
+          if (option.options) {
+            option.options = this.decorateModalOptions(option.options, payload)
+          }
+          let consequence = this.optionConsequence(option, payload)
+          if (consequence) {
+            option.tooltip = option.tooltip ? option.tooltip + '\n' + consequence : consequence
+          } else if (!option.tooltip) {
+            option.tooltip = this.defaultOptionTooltip(option)
+          }
+          if (option.disabled && option.tooltip) {
+            option.showDisabledWithTooltip = true
+          }
+          return option
+        },
+        defaultOptionTooltip(option) {
+          let text = String((option && option.text) || '')
+          if (/close/i.test(text)) return 'Consequences: closes this Society window; no stats change.'
+          if (/back|cancel|later|previous/i.test(text)) return 'Consequences: returns without changing stats.'
+          if (/next page/i.test(text)) return 'Consequences: opens the next page; no stats change.'
+          let method = option && option.action && option.action.method
+          if (method && /^open/.test(method)) return 'Consequences: opens another Society view; no stats change.'
+          return ''
+        },
+        optionConsequence(option, payload) {
+          let action = option && option.action
+          let method = action && action.method
+          if (!method) {
+            return ''
+          }
+          let context = action.context || {}
+          let house = this.houseFromContext(context)
+          let state = daapi.getState()
+          let profile = house ? (this.strata[house.stratum] || this.strata.plebeian) : this.strata.plebeian
+          if (method === 'openEstate') return 'Consequences: opens that social order; no stats change.'
+          if (method === 'openRelations') return 'Consequences: opens allies and rivals; no stats change.'
+          if (method === 'openLog') return 'Consequences: opens recent affairs; no stats change.'
+          if (method === 'openHub') return 'Consequences: returns to the Society overview; no stats change.'
+          if (method === 'openHouse') return 'Consequences: opens the selected house; no stats change.'
+          if (method === 'openPeople') return 'Consequences: opens notable people; no stats change.'
+          if (method === 'openPerson') return 'Consequences: opens this character; no stats change.'
+          if (method === 'openMarriageHousehold') return 'Consequences: chooses one of your unmarried adult family members; no stats change yet.'
+          if (method === 'openMarriageCandidates') return 'Consequences: chooses possible spouses from this house; no stats change yet.'
+          if (method === 'confirmSocietyMarriage') return 'Consequences: opens the final wedding confirmation; no stats change yet.'
+          if (method === 'randomizePlayerCrest') return 'Consequences: creates a new player shield; no stats change.'
+          if (method === 'cyclePlayerCrest') return 'Consequences: changes this shield part only; no stats change.'
+          if (method === 'togglePlayerCrestOverlay') return 'Consequences: toggles the floating player shield badge; no stats change.'
+          if (method === 'sendGift') return this.effectLine([this.changeText('cash', -this.actionCost(house || {}, 'gift')), '+8 to +16 house relation', 'possible +1 favor'])
+          if (method === 'hostDinner') return this.effectLine([this.changeText('cash', -this.actionCost(house || {}, 'dinner')), '+12 prestige', '+10 to +20 house relation', 'lowers house heat'])
+          if (method === 'askSupport') {
+            let support = Math.max(20, Math.round((profile.support || 50) + ((house && house.strength) || 0) * 2))
+            return this.effectLine(['+' + support + ' influence', (house && house.favor > 0) ? '-1 favor, -4 house relation' : '-16 house relation', '+1 house heat'])
+          }
+          if (method === 'tradeDeal') {
+            let amount = Math.max(8, Math.round((profile.revenue || 20) + ((house && house.strength) || 0) / 3))
+            return this.effectLine(['+' + amount + ' monthly revenue for 12 months', '+5 house relation'])
+          }
+          if (method === 'offerPatronage') {
+            let stipend = Math.max(8, Math.round((profile.revenue || 20) / 2))
+            return this.effectLine(['-' + stipend + ' monthly revenue for 12 months', '+8 prestige', '+22 house relation', '+1 favor'])
+          }
+          if (method === 'seekPatronage') {
+            let amount = Math.max(60, Math.round(((house && house.strength) || 20) * 3))
+            return this.effectLine(['+' + amount + ' influence', '-5 prestige', '-8 house relation', 'may spend 1 favor'])
+          }
+          if (method === 'startRivalry') return this.effectLine(['+10 prestige', '+25 influence', 'sets relation to -65 or worse', 'starts rivalry'])
+          if (method === 'reconcile') return this.effectLine([this.changeText('cash', -this.actionCost(house || {}, 'reconcile')), '-20 influence', '+38 house relation', 'may end rivalry'])
+          if (method === 'praisePerson') return this.effectLine(['+3 prestige', '+6 house relation'])
+          if (method === 'requestIntroduction') return this.effectLine(['+35 influence', '-3 house relation', 'possible +1 favor'])
+          if (method === 'spreadRumor') return this.effectLine(['usually +35 influence, +5 prestige, -22 house relation', 'if exposed: -15 prestige, -35 relation, rivalry'])
+          if (method === 'answerSlander') return this.effectLine(['-35 influence', '+4 prestige', '-8 house relation', '+2 house heat'])
+          if (method === 'ignoreSlander') return this.effectLine(['-10 prestige', 'lowers house heat'])
+          if (method === 'acceptOpening') return this.effectLine(['+60 influence', '+8 house relation', '+1 favor'])
+          if (method === 'declineOpening') return this.effectLine(['+3 prestige', '-4 house relation'])
+          if (method === 'supportPetition') return this.effectLine(['-120 cash', '+7 prestige', '+18 house relation', 'possible +1 favor'])
+          if (method === 'refusePetition') return this.effectLine(['-12 house relation'])
+          if (method === 'attendFamilyInvitation') {
+            let cost = Math.max(25, Math.round((profile.cost || 200) * 0.12))
+            return this.effectLine(['-' + cost + ' cash', '+10 prestige', '+14 house relation', 'possible +1 favor'])
+          }
+          if (method === 'declineFamilyInvitation') return this.effectLine(['-7 house relation', '+1 house heat'])
+          if (method === 'endorseOffice') return this.effectLine(['-45 influence', '+10 prestige', '+14 house relation', '+10 house power', '+1 favor'])
+          if (method === 'honorWedding') {
+            let cost = Math.max(80, Math.round(this.actionCost(house || {}, 'gift') * 0.8))
+            return this.effectLine(['-' + cost + ' cash', '+5 prestige', '+16 house relation', '+5 house stability'])
+          }
+          if (method === 'judgeInheritance') return this.effectLine(['-30 influence', '70%: +12 prestige, +18 relation, +12 stability, +1 favor', 'failure: -8 prestige, -16 relation, -8 stability'])
+          if (method === 'investVenture') {
+            let cost = Math.max(120, Math.round(this.actionCost(house || {}, 'gift') * 0.9))
+            let income = Math.max(12, Math.round((profile.revenue || 25) * 0.9))
+            return this.effectLine(['-' + cost + ' cash', '+' + income + ' monthly revenue for 8 months', '+10 house relation'])
+          }
+          if (method === 'shieldScandal') return this.effectLine(['-35 influence', '-4 prestige', '+20 house relation', '+8 stability', '+1 favor'])
+          if (method === 'exploitScandal') return this.effectLine(['+50 influence', '+6 prestige', '-35 house relation', '-8 house power', 'may start rivalry'])
+          if (method === 'declineFamilyAffair') return this.effectLine(['-3 house relation'])
+          if (method === 'performSocietyMarriage') {
+            let effects = house ? this.marriageEffects(state, house) : false
+            if (!effects) return 'Consequences: performs the vanilla marriage and refreshes Society.'
+            let parts = [
+              this.changeText('cash', effects.stats && effects.stats.cash),
+              this.changeText('prestige', effects.stats && effects.stats.prestige),
+              this.changeText('influence', effects.stats && effects.stats.influence),
+              effects.revenue ? '+' + effects.revenue + ' monthly revenue for 24 months' : '',
+              '+' + effects.relation + ' house relation',
+              '+1 favor',
+              'spouse link in vanilla family UI'
+            ]
+            return this.effectLine(parts)
+          }
+          return ''
+        },
+        houseFromContext(context) {
+          context = context || {}
+          if (context.houseId === undefined || context.houseId === null || context.houseId === '') {
+            return false
+          }
+          let society = this.load()
+          return society && society.houses ? society.houses[context.houseId] : false
+        },
+        effectLine(parts) {
+          return 'Consequences: ' + (parts || []).filter(Boolean).join(', ') + '.'
+        },
+        changeText(label, value) {
+          value = Math.round(parseFloat(value || 0))
+          if (!value) {
+            return ''
+          }
+          return (value > 0 ? '+' : '') + value + ' ' + label
+        },
         syncWithGame(society, state) {
           let members = this.collectHouseMembers(state)
           for (let dynastyId in members) {
@@ -300,7 +442,7 @@
         collectHouseMembers(state) {
           let result = {}
           let current = state.current || {}
-          let player = state.characters[current.id] || {}
+          let player = state.characters[this.currentCharacterId(state)] || {}
           let playerDynastyId = player.dynastyId
           let household = {}
           ;(current.householdCharacterIds || []).forEach((characterId) => {
@@ -590,9 +732,12 @@
             return 'civic'
           }
           if (heritage === 'roman_freedman') {
-            return prestige < 1200 || hasLabor ? 'poor' : 'freedmen'
+            return prestige < 500 || (prestige < 1200 && hasLabor) ? 'poor' : 'freedmen'
           }
-          if (prestige < 1200 || strength < 12 || hasLabor) {
+          if ((heritage === 'roman_plebian' || heritage === 'roman_plebeian') && prestige >= 1200) {
+            return 'plebeian'
+          }
+          if (prestige < 1200 || strength < 12 || (hasLabor && prestige < 1800)) {
             return 'poor'
           }
           return 'plebeian'
@@ -1047,7 +1192,7 @@
           let image = this.houseCrestIcon(society, house)
           this.save(society)
           if (event === 'officeCampaign') {
-            daapi.pushInteractionModalQueue({
+            this.pushModal({
               title: house.name + ' seeks office',
               message: house.name + ' is gathering support for a magistracy. They ask whether your household will be seen beside them.',
               image: image,
@@ -1072,7 +1217,7 @@
               ]
             })
           } else if (event === 'marriageAlliance') {
-            daapi.pushInteractionModalQueue({
+            this.pushModal({
               title: 'Wedding politics in ' + house.name,
               message: house.name + ' invites your household to honor a marriage alliance. A gift would be noticed; absence would be noticed too.',
               image: image,
@@ -1096,7 +1241,7 @@
               ]
             })
           } else if (event === 'inheritanceDispute') {
-            daapi.pushInteractionModalQueue({
+            this.pushModal({
               title: 'Inheritance dispute: ' + house.name,
               message: 'A dispute inside ' + house.name + ' has become public. They ask you to lend judgment and pressure.',
               image: image,
@@ -1121,7 +1266,7 @@
               ]
             })
           } else if (event === 'tradeVenture') {
-            daapi.pushInteractionModalQueue({
+            this.pushModal({
               title: house.name + ' expands trade',
               message: house.name + ' has found a profitable opening and offers you a place in the venture.',
               image: image,
@@ -1146,7 +1291,7 @@
               ]
             })
           } else if (event === 'scandal') {
-            daapi.pushInteractionModalQueue({
+            this.pushModal({
               title: 'Scandal in ' + house.name,
               message: house.name + ' has been embarrassed by a scandal. You can shield them, exploit it, or let the city talk.',
               image: image,
@@ -1185,7 +1330,7 @@
         eventRivalSlander(society, house) {
           let state = daapi.getState()
           this.save(society)
-          daapi.pushInteractionModalQueue({
+          this.pushModal({
             title: house.name + ' spreads a rumor',
             message: 'Your rivals in ' + house.name + ' are whispering that your household has overreached its station. The rumor is small now, but it has teeth.',
             image: this.houseCrestIcon(society, house),
@@ -1215,7 +1360,7 @@
         eventFriendlyOpening(society, house) {
           let state = daapi.getState()
           this.save(society)
-          daapi.pushInteractionModalQueue({
+          this.pushModal({
             title: house.name + ' offers an opening',
             message: 'A friendly contact from ' + house.name + ' suggests a public exchange of support. It would strengthen your network, though it may bind you to their interests.',
             image: this.houseCrestIcon(society, house),
@@ -1243,7 +1388,7 @@
         eventPetition(society, house) {
           let state = daapi.getState()
           this.save(society)
-          daapi.pushInteractionModalQueue({
+          this.pushModal({
             title: 'Petition from ' + house.name,
             message: 'A lesser family connected to ' + house.name + ' asks for your help in a local dispute. It is not glamorous politics, but gratitude from the lower orders can travel far.',
             image: this.houseCrestIcon(society, house),
@@ -1271,7 +1416,7 @@
         eventFamilyInvitation(society, house) {
           let state = daapi.getState()
           this.save(society)
-          daapi.pushInteractionModalQueue({
+          this.pushModal({
             title: 'Invitation from ' + house.name,
             message: house.name + ' invites your household to a public family occasion. Attending would cost time and gifts, but the city notices who stands beside whom.',
             image: this.houseCrestIcon(society, house),
@@ -1311,7 +1456,7 @@
             'Open rivalries: ' + rivals,
             'Network income and rival pressure update each month.'
           ].join('\n')
-          daapi.pushInteractionModalQueue({
+          this.pushModal({
             title: 'Roman Society',
             message,
             image: daapi.requireImage('/cor_society/icon.svg'),
@@ -1393,7 +1538,7 @@
               method: 'openHub'
             }
           })
-          daapi.pushInteractionModalQueue({
+          this.pushModal({
             title: this.strata[stratum].title,
             message: shown.length ? 'Choose a house to inspect.' : 'No houses are known in this order yet.',
             image: daapi.requireImage('/cor_society/icon.svg'),
@@ -1423,7 +1568,7 @@
               method: 'openHub'
             }
           })
-          daapi.pushInteractionModalQueue({
+          this.pushModal({
             title: 'Allies and Rivals',
             message: houses.length ? 'These houses matter most to your current political life.' : 'No strong relationships or rivalries yet.',
             image: daapi.requireImage('/cor_society/icon.svg'),
@@ -1432,7 +1577,7 @@
         },
         openLog() {
           let society = this.ensure()
-          daapi.pushInteractionModalQueue({
+          this.pushModal({
             title: 'Recent Affairs',
             message: (society.log || []).length ? society.log.join('\n') : 'No public affairs recorded yet.',
             image: daapi.requireImage('/cor_society/icon.svg'),
@@ -1450,7 +1595,7 @@
         openPlayerCrest() {
           let society = this.ensure()
           let state = daapi.getState()
-          let character = state.characters[(state.current || {}).id] || {}
+          let character = state.characters[this.currentCharacterId(state)] || {}
           let dynasty = state.dynasties[character.dynastyId] || {}
           let crest = this.ensurePlayerCrest(society, state)
           this.save(society)
@@ -1464,7 +1609,7 @@
             'This menu only edits the player house shield.'
           ].join('\n')
           let image = this.crestIcon(crest, 132)
-          daapi.pushInteractionModalQueue({
+          this.pushModal({
             title: 'House Shield',
             message,
             image,
@@ -1568,7 +1713,7 @@
             'Latest: ' + (house.lastFamilyEvent || 'none'),
             'Status: ' + (house.rivalry ? 'Rivalry' : (house.relation >= 55 ? 'Ally' : 'Neutral'))
           ].join('\n')
-          daapi.pushInteractionModalQueue({
+          this.pushModal({
             title: house.name,
             message,
             image: this.houseCrestIcon(society, house),
@@ -1690,7 +1835,7 @@
               context: { houseId }
             }
           })
-          daapi.pushInteractionModalQueue({
+          this.pushModal({
             title: 'People of ' + house.name,
             message: peopleIds.length ? 'Notable and visible members of this house.' : 'No visible living members are known yet.',
             image: this.houseCrestIcon(society, house),
@@ -1711,7 +1856,7 @@
             'House relation: ' + this.signed(house.relation || 0),
             'House favors: ' + (house.favor || 0)
           ].join('\n')
-          daapi.pushInteractionModalQueue({
+          this.pushModal({
             title: this.characterName(character, state),
             message,
             image: this.characterPortrait(character, state, house),
@@ -1766,7 +1911,7 @@
           }
           let access = this.marriageOptionInfo(society, state, house)
           if (!access.available) {
-            daapi.pushInteractionModalQueue({
+            this.pushModal({
               title: 'Marriage unavailable',
               message: access.tooltip,
               image: this.houseCrestIcon(society, house),
@@ -1804,9 +1949,9 @@
               context: { houseId }
             }
           })
-          daapi.pushInteractionModalQueue({
+          this.pushModal({
             title: 'Arrange marriage',
-            message: candidates.length ? 'Choose a member of your household.' : 'No unmarried adult in your household is available.',
+            message: candidates.length ? 'Choose one of your unmarried adult family members.' : 'No unmarried adult in your family is available.',
             image: this.houseCrestIcon(society, house),
             options
           })
@@ -1822,7 +1967,7 @@
           }
           let access = this.marriageOptionInfo(society, state, house)
           if (!access.available) {
-            daapi.pushInteractionModalQueue({
+            this.pushModal({
               title: 'Marriage unavailable',
               message: access.tooltip,
               image: this.houseCrestIcon(society, house),
@@ -1876,7 +2021,7 @@
               context: { houseId }
             }
           })
-          daapi.pushInteractionModalQueue({
+          this.pushModal({
             title: 'Marriage with ' + house.name,
             message: candidates.length ? 'Choose a spouse for ' + this.characterName(playerCharacter, state) + '.' : 'No compatible unmarried adult is available in this house.',
             image: this.characterPortrait(playerCharacter, state),
@@ -1901,7 +2046,7 @@
             '',
             matrilineal ? 'The marriage will be matrilineal, keeping your household line central.' : 'The marriage will follow the usual household line.'
           ].join('\n')
-          daapi.pushInteractionModalQueue({
+          this.pushModal({
             title: 'Confirm marriage?',
             message,
             image: this.characterPortrait(spouse, state, house),
@@ -1969,7 +2114,7 @@
           house.lastFamilyEvent = 'Marriage alliance with your household.'
           this.log(society, 'A marriage joins your household with ' + house.name + ': ' + this.characterName(playerCharacter, state) + ' and ' + this.characterName(spouse, state) + '.')
           this.save(society)
-          daapi.pushInteractionModalQueue({
+          this.pushModal({
             title: 'Marriage arranged',
             message: [
               this.characterName(spouse, state) + ' is now married to ' + this.characterName(playerCharacter, state) + '.',
@@ -2365,12 +2510,94 @@
             'Agenda: ' + (house.agenda || 'unknown')
           ].join('\n')
         },
+        currentCharacterId(state) {
+          let current = (state && state.current) || {}
+          if (current.id !== undefined && current.id !== null) return current.id
+          if (current.characterId !== undefined && current.characterId !== null) return current.characterId
+          if (current.currentCharacterId !== undefined && current.currentCharacterId !== null) return current.currentCharacterId
+          if (current.playerCharacterId !== undefined && current.playerCharacterId !== null) return current.playerCharacterId
+          return null
+        },
+        playerFamilyMemberIds(state) {
+          state = state || daapi.getState()
+          let characters = state.characters || {}
+          let current = state.current || {}
+          let currentId = this.currentCharacterId(state)
+          let player = characters[currentId] || {}
+          let dynastyId = player.dynastyId
+          let seen = {}
+          let ids = []
+          let add = (characterId) => {
+            if (characterId === undefined || characterId === null || characterId === '' || seen[characterId]) {
+              return
+            }
+            seen[characterId] = true
+            ids.push(characterId)
+          }
+          add(currentId)
+          ;[
+            current.householdCharacterIds,
+            current.formerHouseholdCharacterIds,
+            current.familyCharacterIds,
+            current.dependantCharacterIds,
+            current.dependentCharacterIds
+          ].forEach((list) => {
+            ;(list || []).forEach(add)
+          })
+          let addRelations = (character) => {
+            if (!character) {
+              return
+            }
+            add(character.fatherId)
+            add(character.motherId)
+            add(character.spouseId)
+            ;(character.childrenIds || []).forEach(add)
+            ;(character.siblingIds || []).forEach(add)
+            ;(character.dependantIds || []).forEach(add)
+            ;(character.dependentIds || []).forEach(add)
+          }
+          addRelations(player)
+          for (let characterId in characters) {
+            if (!characters.hasOwnProperty(characterId)) {
+              continue
+            }
+            let character = characters[characterId]
+            if (!character || character.isDead) {
+              continue
+            }
+            if (dynastyId && character.dynastyId === dynastyId) {
+              add(character.id || characterId)
+              addRelations(character)
+            } else if (
+              character.fatherId === currentId ||
+              character.motherId === currentId ||
+              (player.childrenIds || []).indexOf(character.id || characterId) >= 0
+            ) {
+              add(character.id || characterId)
+              addRelations(character)
+            }
+          }
+          return ids.filter((characterId) => {
+            let character = characters[characterId]
+            return character && !character.isDead
+          })
+        },
+        playerFamilyMembers(state) {
+          state = state || daapi.getState()
+          let characters = state.characters || {}
+          return this.playerFamilyMemberIds(state)
+            .map((characterId) => characters[characterId])
+            .filter((character) => character && !character.isDead)
+        },
         playerMarriageCandidates(state) {
-          let ids = ((state.current || {}).householdCharacterIds || []).slice()
+          state = state || daapi.getState()
           let candidates = []
-          ids.forEach((characterId) => {
+          this.playerFamilyMemberIds(state).forEach((characterId) => {
             let character = state.characters[characterId]
             if (this.isMarriageEligible(character, state)) {
+              if (character.id === undefined || character.id === null) {
+                character.id = characterId
+              }
               candidates.push(character)
             }
           })
@@ -2386,11 +2613,12 @@
           let tooltip = [
             'Player order: ' + this.stratumTitle(playerStratum),
             'Target order: ' + this.stratumTitle(house.stratum),
-            'Relation: ' + this.signed(relation)
+            'Relation: ' + this.signed(relation),
+            'Unmarried adult family members: ' + candidates.length
           ]
           if (!candidates.length) {
             notes.push('no adult')
-            tooltip.push('No unmarried adult in your household.')
+            tooltip.push('No unmarried adult in your family was found.')
           }
           if (diff < -1) {
             notes.push('too low')
@@ -2431,26 +2659,55 @@
           return candidates.sort((a, b) => this.characterScore(b, state) - this.characterScore(a, state))
         },
         playerStratum(state) {
-          let current = state.current || {}
-          let player = state.characters[current.id] || {}
+          state = state || daapi.getState()
+          let player = state.characters[this.currentCharacterId(state)] || {}
           let dynastyId = player.dynastyId
-          let members = []
-          ;(current.householdCharacterIds || []).forEach((characterId) => {
-            let character = state.characters[characterId]
-            if (character && !character.isDead && character.dynastyId === dynastyId) {
-              members.push(character)
-            }
-          })
-          if (!members.length && player.id) {
-            members.push(player)
-          }
+          let members = this.playerFamilyMembers(state)
           let dynasty = state.dynasties[dynastyId] || {}
+          let heritage = this.normalizedHeritage(dynasty.heritage || player.heritage || '')
+          let currentClass = this.safeCurrentClass()
+          let hasSenate = members.some((character) => this.isSenatorialCharacter(character, state))
+          if (hasSenate) {
+            return 'senatorial'
+          }
+          if (heritage === 'roman_patrician') {
+            return currentClass !== null && currentClass > 2 ? 'equestrian' : 'senatorial'
+          }
+          if (heritage === 'roman_novus_homo') {
+            return currentClass !== null && currentClass > 2 ? 'civic' : 'equestrian'
+          }
+          if (heritage === 'roman_freedman') {
+            return currentClass !== null && currentClass > 5 ? 'poor' : 'freedmen'
+          }
+          if (heritage === 'roman_plebian' || heritage === 'roman_plebeian') {
+            return 'plebeian'
+          }
+          if (currentClass !== null) {
+            if (currentClass <= 1) return 'equestrian'
+            if (currentClass <= 2) return 'civic'
+            if (currentClass <= 5) return 'plebeian'
+            return 'poor'
+          }
           let strength = 0
           members.forEach((character) => {
             strength += this.characterScore(character, state)
           })
           strength += Math.round(parseFloat(dynasty.prestige || 0) / 1000)
-          return this.classifyHouse(dynasty, members, strength, members.some((character) => this.isSenatorialCharacter(character, state)))
+          return this.classifyHouse(dynasty, members, strength, false)
+        },
+        normalizedHeritage(heritage) {
+          return String(heritage || '').toLowerCase()
+        },
+        safeCurrentClass() {
+          try {
+            if (typeof daapi !== 'undefined' && daapi.calculateCurrentClass) {
+              let currentClass = parseInt(daapi.calculateCurrentClass(), 10)
+              return isNaN(currentClass) ? null : currentClass
+            }
+          } catch (err) {
+            console.warn(err)
+          }
+          return null
         },
         socialLevel(stratum) {
           let levels = {
@@ -2546,13 +2803,14 @@
           }
         },
         playerCrestId(state) {
-          let character = state.characters[(state.current || {}).id] || {}
-          return 'player_' + this.safeId(character.dynastyId || (state.current || {}).id || 'house')
+          let currentId = this.currentCharacterId(state)
+          let character = state.characters[currentId] || {}
+          return 'player_' + this.safeId(character.dynastyId || currentId || 'house')
         },
         ensurePlayerCrest(society, state) {
           society.crests = society.crests || {}
           let crestId = this.playerCrestId(state)
-          let character = state.characters[(state.current || {}).id] || {}
+          let character = state.characters[this.currentCharacterId(state)] || {}
           let dynasty = state.dynasties[character.dynastyId] || {}
           if (!society.crests[crestId]) {
             society.crests[crestId] = this.generateCrest('player-' + crestId + '-' + this.houseName(dynasty, character.dynastyId || crestId))

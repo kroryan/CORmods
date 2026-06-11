@@ -6,6 +6,7 @@
       key: 'cor_society',
       action: {
         title: 'Roman Society',
+        tooltip: 'Opens the Society overview. Consequences: no stats change until you choose an action inside.',
         icon: daapi.requireImage('/cor_society/icon.svg'),
         isAvailable: true,
         process: {
@@ -18,6 +19,7 @@
       key: 'cor_society_player_crest',
       action: {
         title: 'House Shield',
+        tooltip: 'Opens player house shield settings. Consequences: visual shield changes only; no stats change.',
         icon: daapi.requireImage('/cor_society/shield.svg'),
         isAvailable: true,
         process: {
@@ -32,6 +34,7 @@
         key: 'cor_society_debug',
         action: {
           title: 'Roman Society',
+          tooltip: 'Opens the Society overview. Consequences: no stats change until you choose an action inside.',
           icon: daapi.requireImage('/cor_society/icon.svg'),
           isAvailable: true,
           hideWhenBusy: false,
