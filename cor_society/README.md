@@ -8,7 +8,7 @@ Roman Society adds a living social layer to Citizen of Rome.
 - Groups houses into social orders using existing game data: dynasty prestige, heritage, jobs, inheritance, Senate links, and living members.
 - Generates missing houses so every social level has families to interact with.
 - Seeds generated houses with real game characters at startup, preferring young adult founders so they have time to marry, have children, rise, or fall.
-- Uses vanilla Citizen of Rome portraits through the same `icons/characters/...` assets used by the base game and keeps vanilla look data as the base identity.
+- Uses vanilla Citizen of Rome portrait assets through a local `icons/characters/...` to `img/*.svg` resolver, and keeps vanilla look data as the base identity.
 - Uses stable vanilla-based looks for Society-generated characters, with age progression and inherited look colors.
 - Gives generated characters vanilla Citizen of Rome traits through `daapi.addTrait`.
 - Generates persistent Roman-style house shields for the player and every known NPC house.
@@ -51,7 +51,7 @@ Generated people are created with the game's own `daapi.generateCharacter` flow.
 
 Generated characters are given a real game character ID and a vanilla Roman base `look`, so the game can recognize them as normal characters. Children inherit the base look type from parents with small variation, and portraits age by stage without losing that inherited visual base.
 
-The wardrobe stores a manual `corSocietyOutfit` on the selected household member but does not replace the character's vanilla `look`. Society renders wardrobe clothing as a visual overlay on top of the vanilla portrait in Society screens and DOM overlays where possible. Older saves that still have a previous `cor_society` DAAPI portrait look are migrated back to their stored vanilla `corSocietyOriginalLook`.
+The wardrobe stores a manual `corSocietyOutfit` on the selected household member and preserves the original vanilla `look` in `corSocietyOriginalLook`. While a manual outfit is active, Society registers a complete DAAPI portrait look in `cor_society_wardrobe` so vanilla character screens can render the changed portrait. Choosing `Automatic` restores the preserved vanilla look. Older saves that still have a previous `cor_society` DAAPI portrait look are migrated back to their stored vanilla `corSocietyOriginalLook`.
 
 Generated traits use vanilla trait keys from the official example mod documentation, such as `senator`, `educated`, `literate`, `honorable`, `ambitious`, `gregarious`, `strong`, and `sly`.
 

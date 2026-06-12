@@ -62,7 +62,7 @@ A social simulation layer inspired by court and dynasty politics. It uses existi
 - Exposes vanilla / other mod character actions when a character currently has them
 - Generated Society characters receive vanilla Citizen of Rome traits through the game's trait API
 - Lets the player arrange marriages between their family and NPC houses through the vanilla marriage API, including the current player character when unmarried, without faking spouse links if the vanilla API rejects a wedding
-- Keeps Society-generated characters on vanilla Roman `look` data and avoids replacing vanilla portraits with Society DAAPI looks; wardrobe clothing is stored separately and shown as a Society visual overlay where possible
+- Keeps Society-generated characters on vanilla Roman `look` data; the wardrobe preserves that original look and temporarily switches manual outfits to complete DAAPI portrait looks so vanilla screens can render the changed clothing
 - Marriage actions show a short unavailable reason in parentheses and affect prestige, influence, revenue, cash, relations, and favors according to social rank
 - Reads the player's real vanilla property class, senatorial flag, and heritage to decide Society order and update the visible citizen title on the main game screen without overwriting vanilla heritage
 - All Society buttons, including event options and global actions, provide hold/long-press tooltips explaining the consequences before pressing

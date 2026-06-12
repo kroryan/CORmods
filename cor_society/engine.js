@@ -76,7 +76,7 @@
   },
   methods: {
     boot() {
-      if (window.corSociety && window.corSociety.version === '1.1.14') {
+      if (window.corSociety && window.corSociety.version === '1.1.15') {
         window.corSociety.ensure()
         window.corSociety.startPlayerCrestOverlay()
         window.corSociety.startPlayerStatusOverlay()
@@ -84,12 +84,103 @@
       }
 
       window.corSociety = {
-        version: '1.1.14',
+        version: '1.1.15',
         event: '/cor_society/engine',
         flag: 'corSocietyState',
         noticeFlag: 'corSocietyInstallNoticeSeen',
         logLimit: 240,
         historyPageSize: 8,
+        wardrobeLookGroup: 'cor_society_wardrobe',
+        vanillaPortraitAssets: {
+          'icons/characters/female.svg': 'img/female.f707fe58.svg',
+          'icons/characters/female_baby.svg': 'img/female_baby.80ac0b1b.svg',
+          'icons/characters/female_old.svg': 'img/female_old.aeab9bd9.svg',
+          'icons/characters/female_teen.svg': 'img/female_teen.94f13bb5.svg',
+          'icons/characters/male.svg': 'img/male.9a3a017c.svg',
+          'icons/characters/male_baby.svg': 'img/male_baby.32e231b9.svg',
+          'icons/characters/male_old.svg': 'img/male_old.c89a5bac.svg',
+          'icons/characters/male_teen.svg': 'img/male_teen.7ca5358d.svg',
+          'icons/characters/roman/auburn/female/adult.svg': 'img/adult.eaeb7ef5.svg',
+          'icons/characters/roman/auburn/female/baby.svg': 'img/baby.3774c082.svg',
+          'icons/characters/roman/auburn/female/old.svg': 'img/old.f1172f25.svg',
+          'icons/characters/roman/auburn/female/teen.svg': 'img/teen.ace18308.svg',
+          'icons/characters/roman/auburn/male/adult.svg': 'img/adult.186b1435.svg',
+          'icons/characters/roman/auburn/male/baby.svg': 'img/baby.dca7baee.svg',
+          'icons/characters/roman/auburn/male/old.svg': 'img/old.98233ad6.svg',
+          'icons/characters/roman/auburn/male/teen.svg': 'img/teen.2c3d4382.svg',
+          'icons/characters/roman/black/female/adult.svg': 'img/adult.8bed277b.svg',
+          'icons/characters/roman/black/female/baby.svg': 'img/baby.a0131621.svg',
+          'icons/characters/roman/black/female/old.svg': 'img/old.5646bd45.svg',
+          'icons/characters/roman/black/female/teen.svg': 'img/teen.bb5d18a0.svg',
+          'icons/characters/roman/black/male/adult.svg': 'img/adult.a82907d8.svg',
+          'icons/characters/roman/black/male/baby.svg': 'img/baby.b5d50f2b.svg',
+          'icons/characters/roman/black/male/old.svg': 'img/old.192ba1c1.svg',
+          'icons/characters/roman/black/male/teen.svg': 'img/teen.cc5a3167.svg',
+          'icons/characters/roman/blonde/female/adult.svg': 'img/adult.f3b985c6.svg',
+          'icons/characters/roman/blonde/female/baby.svg': 'img/baby.64dcb1f6.svg',
+          'icons/characters/roman/blonde/female/old.svg': 'img/old.85bf0ff5.svg',
+          'icons/characters/roman/blonde/female/teen.svg': 'img/teen.f8472117.svg',
+          'icons/characters/roman/blonde/male/adult.svg': 'img/adult.8005b37d.svg',
+          'icons/characters/roman/blonde/male/baby.svg': 'img/baby.6a7f3799.svg',
+          'icons/characters/roman/blonde/male/old.svg': 'img/old.87edf76a.svg',
+          'icons/characters/roman/blonde/male/teen.svg': 'img/teen.ee0167f6.svg',
+          'icons/characters/roman/brown/female/adult.svg': 'img/adult.59b000f2.svg',
+          'icons/characters/roman/brown/female/baby.svg': 'img/baby.9fbb91ff.svg',
+          'icons/characters/roman/brown/female/old.svg': 'img/old.1c61dc78.svg',
+          'icons/characters/roman/brown/female/teen.svg': 'img/teen.2e7738dc.svg',
+          'icons/characters/roman/brown/male/adult.svg': 'img/adult.8a6ed9f9.svg',
+          'icons/characters/roman/brown/male/baby.svg': 'img/baby.1d8786e8.svg',
+          'icons/characters/roman/brown/male/old.svg': 'img/old.adb54f1d.svg',
+          'icons/characters/roman/brown/male/teen.svg': 'img/teen.71ef4800.svg',
+          'icons/characters/roman/brown_curly/female/adult.svg': 'img/adult.3b93dc6a.svg',
+          'icons/characters/roman/brown_curly/female/baby.svg': 'img/baby.cc70ced5.svg',
+          'icons/characters/roman/brown_curly/female/old.svg': 'img/old.9bcd6b91.svg',
+          'icons/characters/roman/brown_curly/female/teen.svg': 'img/teen.cf57a6f7.svg',
+          'icons/characters/roman/brown_curly/male/adult.svg': 'img/adult.87b4f6e9.svg',
+          'icons/characters/roman/brown_curly/male/baby.svg': 'img/baby.fc4eb68f.svg',
+          'icons/characters/roman/brown_curly/male/old.svg': 'img/old.46b580d0.svg',
+          'icons/characters/roman/brown_curly/male/teen.svg': 'img/teen.ed01254f.svg',
+          'icons/characters/roman/dusky/female/adult.svg': 'img/adult.126d7721.svg',
+          'icons/characters/roman/dusky/female/baby.svg': 'img/baby.0a48ceaa.svg',
+          'icons/characters/roman/dusky/female/old.svg': 'img/old.79d0435f.svg',
+          'icons/characters/roman/dusky/female/teen.svg': 'img/teen.e082b316.svg',
+          'icons/characters/roman/dusky/male/adult.svg': 'img/adult.f27497db.svg',
+          'icons/characters/roman/dusky/male/baby.svg': 'img/baby.c7e78900.svg',
+          'icons/characters/roman/dusky/male/old.svg': 'img/old.fb022009.svg',
+          'icons/characters/roman/dusky/male/teen.svg': 'img/teen.21c5438d.svg',
+          'icons/characters/roman/hazel/female/adult.svg': 'img/adult.bd668851.svg',
+          'icons/characters/roman/hazel/female/baby.svg': 'img/baby.1a9b89b4.svg',
+          'icons/characters/roman/hazel/female/old.svg': 'img/old.73d0e21f.svg',
+          'icons/characters/roman/hazel/female/teen.svg': 'img/teen.69563d5c.svg',
+          'icons/characters/roman/hazel/male/adult.svg': 'img/adult.a832d2ed.svg',
+          'icons/characters/roman/hazel/male/baby.svg': 'img/baby.491b5337.svg',
+          'icons/characters/roman/hazel/male/old.svg': 'img/old.2d782b29.svg',
+          'icons/characters/roman/hazel/male/teen.svg': 'img/teen.fcd006f8.svg',
+          'icons/characters/roman/olive/female/adult.svg': 'img/adult.3ed0c1b2.svg',
+          'icons/characters/roman/olive/female/baby.svg': 'img/baby.429f032d.svg',
+          'icons/characters/roman/olive/female/old.svg': 'img/old.408fef7d.svg',
+          'icons/characters/roman/olive/female/teen.svg': 'img/teen.01310b64.svg',
+          'icons/characters/roman/olive/male/adult.svg': 'img/adult.da4471a2.svg',
+          'icons/characters/roman/olive/male/baby.svg': 'img/baby.b825b044.svg',
+          'icons/characters/roman/olive/male/old.svg': 'img/old.89dedfc1.svg',
+          'icons/characters/roman/olive/male/teen.svg': 'img/teen.e75b34c1.svg',
+          'icons/characters/roman/red/female/adult.svg': 'img/adult.c3dbcbe6.svg',
+          'icons/characters/roman/red/female/baby.svg': 'img/baby.100e8154.svg',
+          'icons/characters/roman/red/female/old.svg': 'img/old.2d4a6287.svg',
+          'icons/characters/roman/red/female/teen.svg': 'img/teen.79bc1ad5.svg',
+          'icons/characters/roman/red/male/adult.svg': 'img/adult.e50e6182.svg',
+          'icons/characters/roman/red/male/baby.svg': 'img/baby.3ce59ad9.svg',
+          'icons/characters/roman/red/male/old.svg': 'img/old.eaebff03.svg',
+          'icons/characters/roman/red/male/teen.svg': 'img/teen.ddc1b1e8.svg',
+          'icons/characters/roman/tan/female/adult.svg': 'img/adult.3d0c21d8.svg',
+          'icons/characters/roman/tan/female/baby.svg': 'img/baby.5a264e0c.svg',
+          'icons/characters/roman/tan/female/old.svg': 'img/old.439bc75d.svg',
+          'icons/characters/roman/tan/female/teen.svg': 'img/teen.c726315b.svg',
+          'icons/characters/roman/tan/male/adult.svg': 'img/adult.87a69f29.svg',
+          'icons/characters/roman/tan/male/baby.svg': 'img/baby.2bfbf42d.svg',
+          'icons/characters/roman/tan/male/old.svg': 'img/old.aee50a51.svg',
+          'icons/characters/roman/tan/male/teen.svg': 'img/teen.93a4a950.svg'
+        },
         stratumOrder: ['senatorial', 'equestrian', 'civic', 'plebeian', 'freedmen', 'poor'],
         strata: {
           senatorial: {
@@ -219,6 +310,7 @@
           this.ensureCrests(society, state)
           this.syncPlayerSocietyStatus(society, state)
           this.restoreSocietyPortraitLooks(state)
+          this.registerWardrobePortraitLooks(state)
           this.allowAchievementsWithSociety(state)
           society.lastEnsureKey = this.ensureKey(society, state)
           this.save(society)
@@ -1127,6 +1219,7 @@
         },
         registerSocietyPortraitLooks(society, state) {
           this.restoreSocietyPortraitLooks(state)
+          this.registerWardrobePortraitLooks(state)
         },
         restoreSocietyPortraitLooks(state) {
           if (!state || !state.characters) {
@@ -1140,12 +1233,31 @@
             if (
               character &&
               character.look &&
-              character.look.group === 'cor_society' &&
+              (
+                character.look.group === 'cor_society' ||
+                (character.look.group === this.wardrobeLookGroup && !character.corSocietyOutfit)
+              ) &&
               character.corSocietyOriginalLook
             ) {
               character.id = character.id || characterId
               this.restoreOriginalLookIfNeeded(character, true)
             }
+          }
+        },
+        registerWardrobePortraitLooks(state) {
+          if (!state || !state.characters) {
+            return
+          }
+          for (let characterId in state.characters) {
+            if (!state.characters.hasOwnProperty(characterId)) {
+              continue
+            }
+            let character = state.characters[characterId]
+            if (!character || !character.corSocietyOutfit) {
+              continue
+            }
+            character.id = character.id || characterId
+            this.applyWardrobeLookToCharacter(character, character.corSocietyOutfit, state, true)
           }
         },
         characterCloneForSocietyLook(character, gender, ageStage) {
@@ -1164,6 +1276,108 @@
         applySocietyLookToCharacter(character, type) {
           this.restoreOriginalLookIfNeeded(character, true)
         },
+        originalLookForWardrobe(character) {
+          if (!character) {
+            return {}
+          }
+          if (character.corSocietyOriginalLook) {
+            return { ...character.corSocietyOriginalLook }
+          }
+          let look = character.look || {}
+          if (look.group === this.wardrobeLookGroup || look.group === 'cor_society') {
+            return {}
+          }
+          return { ...look }
+        },
+        wardrobeLookType(characterId, outfit) {
+          return 'c_' + this.safeId(characterId) + '_' + this.safeId(outfit || 'auto')
+        },
+        applyWardrobeLookToCharacter(character, outfit, state, silent) {
+          if (!character || !character.id || !outfit || outfit === 'auto') {
+            return false
+          }
+          state = state || daapi.getState()
+          let originalLook = this.originalLookForWardrobe(character)
+          if (!originalLook || !originalLook.group || !originalLook.type) {
+            originalLook = {
+              group: 'roman',
+              type: 'brown'
+            }
+          }
+          let type = this.wardrobeLookType(character.id, outfit)
+          this.registerWardrobePortraitLook(character, state, outfit, originalLook, type)
+          let newLook = {
+            group: this.wardrobeLookGroup,
+            type,
+            isDAAPI: true
+          }
+          let alreadyApplied = character.look && character.look.group === newLook.group && character.look.type === newLook.type
+          character.corSocietyOriginalLook = originalLook
+          character.corSocietyOutfit = outfit
+          character.look = newLook
+          if (silent && alreadyApplied) {
+            return true
+          }
+          try {
+            daapi.updateCharacter({
+              characterId: character.id,
+              character: {
+                look: newLook,
+                corSocietyOriginalLook: originalLook,
+                corSocietyOutfit: outfit
+              }
+            })
+            daapi.forceUpdateCharacterDisplay({ characterId: character.id })
+          } catch (err) {
+            console.warn(err)
+          }
+          return true
+        },
+        registerWardrobePortraitLook(character, state, outfit, originalLook, type) {
+          if (!daapi.addCharacterLook) {
+            return
+          }
+          this.wardrobeCharacterLooks = this.wardrobeCharacterLooks || {}
+          let stages = ['baby', 'teen', 'adult', 'old']
+          let genders = ['male', 'female']
+          let entry = {}
+          genders.forEach((gender) => {
+            entry[gender] = {}
+            stages.forEach((ageStage) => {
+              entry[gender][ageStage] = this.wardrobePortraitDataUri(character, state, outfit, originalLook, gender, ageStage)
+            })
+          })
+          this.wardrobeCharacterLooks[type] = entry
+          daapi.addCharacterLook({
+            group: this.wardrobeLookGroup,
+            types: this.wardrobeCharacterLooks
+          })
+        },
+        wardrobePortraitDataUri(character, state, outfit, originalLook, gender, ageStage) {
+          let baseCharacter = {
+            ...character,
+            gender,
+            isMale: gender === 'male',
+            corSocietyOutfit: '',
+            look: {
+              ...(originalLook || {}),
+              gender,
+              ageStage
+            }
+          }
+          let basePortrait = this.vanillaCharacterPortrait(baseCharacter, state) || this.genericVanillaCharacterPortrait(baseCharacter, state)
+          let baseHref = this.inlineImageHref(basePortrait) || this.absoluteImageHref(basePortrait)
+          if (!baseHref) {
+            return this.generatedCharacterPortrait({ ...baseCharacter, corSocietyOutfit: outfit }, state)
+          }
+          let role = this.characterPortraitRole(character, ageStage, this.playerStratum(state))
+          let svg = ''
+          svg += '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="512" height="512" viewBox="0 0 512 512">'
+          svg += '<image href="' + this.escapeSvg(baseHref) + '" xlink:href="' + this.escapeSvg(baseHref) + '" x="0" y="0" width="512" height="512" preserveAspectRatio="xMidYMid meet"/>'
+          svg += this.nativeClothingOverlaySvg(outfit, gender, ageStage, role)
+          svg += '</svg>'
+          return this.svgDataUri(svg)
+        },
         restoreOriginalLookIfNeeded(character, includeGenerated) {
           if (!character || (!includeGenerated && character.corSocietyGenerated) || !character.corSocietyOriginalLook) {
             return
@@ -1171,12 +1385,14 @@
           let originalLook = character.corSocietyOriginalLook
           character.look = originalLook
           character.corSocietyOriginalLook = null
+          delete character.corSocietyOutfit
           try {
             daapi.updateCharacter({
               characterId: character.id,
               character: {
                 look: originalLook,
-                corSocietyOriginalLook: null
+                corSocietyOriginalLook: null,
+                corSocietyOutfit: ''
               }
             })
             daapi.forceUpdateCharacterDisplay({ characterId: character.id })
@@ -2798,20 +3014,15 @@
           }
           character.id = character.id || characterId
           if (outfit && outfit !== 'auto') {
-            character.corSocietyOutfit = outfit
+            this.applyWardrobeLookToCharacter(character, outfit, state)
           } else {
             delete character.corSocietyOutfit
-          }
-          try {
-            daapi.updateCharacter({ characterId, character: { corSocietyOutfit: character.corSocietyOutfit || '' } })
-          } catch (err) {
-            console.warn(err)
-          }
-          if (
-            !character.corSocietyOutfit ||
-            (character.look && character.look.group === 'cor_society' && character.corSocietyOriginalLook)
-          ) {
             this.restoreOriginalLookIfNeeded(character, true)
+            try {
+              daapi.updateCharacter({ characterId, character: { corSocietyOutfit: '' } })
+            } catch (err) {
+              console.warn(err)
+            }
           }
           try {
             this.applyPortraitOverlays()
@@ -2864,7 +3075,13 @@
         },
         characterPortraitWithOutfit(character, state, outfit) {
           if (!outfit || outfit === 'auto') {
-            return this.characterPortrait(character, state)
+            let originalLook = this.originalLookForWardrobe(character)
+            let clone = {
+              ...character,
+              corSocietyOutfit: '',
+              look: originalLook && originalLook.group ? originalLook : (character.look || {})
+            }
+            return this.vanillaCharacterPortrait(clone, state) || this.genericVanillaCharacterPortrait(clone, state)
           }
           let clone = { ...character, corSocietyOutfit: outfit }
           return this.nativeCharacterPortraitWithOutfit(clone, state, false, outfit)
@@ -5242,9 +5459,13 @@
             'Skills: I ' + Math.round(skills.intelligence || 0) + ', S ' + Math.round(skills.stewardship || 0) + ', E ' + Math.round(skills.eloquence || 0) + ', C ' + Math.round(skills.combat || 0)
           ].join('\n')
         },
+        vanillaPortraitAsset(path) {
+          path = String(path || '').replace(/^\.\//, '').replace(/^\/+/, '')
+          return this.vanillaPortraitAssets[path] || ''
+        },
         characterPortrait(character, state, house) {
           if (character && character.corSocietyOutfit) {
-            return this.nativeCharacterPortraitWithOutfit(character, state, house, character.corSocietyOutfit)
+            return this.characterPortraitWithOutfit(character, state, character.corSocietyOutfit)
           }
           let portrait = this.vanillaCharacterPortrait(character, state)
           if (this.isImageData(portrait)) {
@@ -5262,7 +5483,7 @@
           try {
             character = character || {}
             let look = character.look || {}
-            if (look.group === 'cor_society' && character.corSocietyOriginalLook) {
+            if ((look.group === 'cor_society' || look.group === this.wardrobeLookGroup) && character.corSocietyOriginalLook) {
               look = character.corSocietyOriginalLook
             }
             let age = this.age(character, state || daapi.getState())
@@ -5278,8 +5499,8 @@
                 type,
                 ageStage
               })
-            } else if (daapi.requireImage) {
-              portrait = daapi.requireImage('icons/characters/' + group + '/' + type + '/' + gender + '/' + ageStage + '.svg')
+            } else {
+              portrait = this.vanillaPortraitAsset('icons/characters/' + group + '/' + type + '/' + gender + '/' + ageStage + '.svg')
             }
             if (this.isImageData(portrait)) {
               return portrait
@@ -5298,7 +5519,7 @@
             gender = gender === 'female' ? 'female' : 'male'
             let ageStage = look.ageStage || this.characterAgeStage(age)
             let suffix = ageStage === 'adult' ? '' : '_' + ageStage
-            return daapi.requireImage('icons/characters/' + gender + suffix + '.svg')
+            return this.vanillaPortraitAsset('icons/characters/' + gender + suffix + '.svg')
           } catch (err) {
             console.warn(err)
           }
@@ -5308,45 +5529,16 @@
           state = state || daapi.getState()
           character = character || {}
           let baseLook = character.corSocietyOriginalLook || character.look || {}
-          if (baseLook.group === 'cor_society') {
+          if (baseLook.group === 'cor_society' || baseLook.group === this.wardrobeLookGroup) {
             baseLook = character.corSocietyOriginalLook || {}
           }
-          let rawGender = character.gender || baseLook.gender || (character.isMale ? 'male' : 'female')
-          let gender = rawGender === 'female' ? 'female' : 'male'
-          let age = this.age(character, state)
-          let ageStage = baseLook.ageStage || this.characterAgeStage(age)
-          let baseCharacter = {
-            ...character,
-            gender,
-            isMale: gender === 'male',
-            corSocietyOutfit: '',
-            look: {
-              ...baseLook,
-              gender,
-              ageStage
-            }
-          }
-          let basePortrait = this.vanillaCharacterPortrait(baseCharacter, state)
-          if (!this.isImageData(basePortrait)) {
-            basePortrait = this.genericVanillaCharacterPortrait(baseCharacter, state)
-          }
-          if (!this.isImageData(basePortrait)) {
-            return ''
-          }
           if (!outfit || outfit === 'auto') {
-            return basePortrait
+            let baseCharacter = { ...character, corSocietyOutfit: '', look: baseLook }
+            return this.vanillaCharacterPortrait(baseCharacter, state) || this.genericVanillaCharacterPortrait(baseCharacter, state)
           }
-          let role = this.characterPortraitRole(character, ageStage, (house && house.stratum) || this.playerStratum(state))
-          let baseHref = this.inlineImageHref(basePortrait)
-          if (!baseHref) {
-            return basePortrait
-          }
-          let svg = ''
-          svg += '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="512" height="512" viewBox="0 0 512 512">'
-          svg += '<image href="' + this.escapeSvg(baseHref) + '" xlink:href="' + this.escapeSvg(baseHref) + '" x="0" y="0" width="512" height="512" preserveAspectRatio="xMidYMid meet"/>'
-          svg += this.nativeClothingOverlaySvg(outfit, gender, ageStage, role)
-          svg += '</svg>'
-          return this.svgDataUri(svg)
+          let gender = (character.gender || baseLook.gender || (character.isMale ? 'male' : 'female')) === 'female' ? 'female' : 'male'
+          let ageStage = baseLook.ageStage || this.characterAgeStage(this.age(character, state))
+          return this.wardrobePortraitDataUri(character, state, outfit, baseLook, gender, ageStage)
         },
         inlineImageHref(value) {
           value = this.imageHref(value)
@@ -5367,12 +5559,16 @@
           if (!value || typeof fetch === 'undefined') {
             return
           }
+          let requestUrl = this.absoluteImageHref(value)
+          if (!requestUrl) {
+            return
+          }
           this.inlineImagePending = this.inlineImagePending || {}
           if (this.inlineImagePending[value]) {
             return
           }
           this.inlineImagePending[value] = true
-          fetch(value)
+          fetch(requestUrl)
             .then((response) => response.text())
             .then((text) => {
               this.inlineImageCache = this.inlineImageCache || {}
@@ -5381,6 +5577,7 @@
               if (typeof window !== 'undefined' && window.corSociety) {
                 window.setTimeout(() => {
                   try {
+                    window.corSociety.registerWardrobePortraitLooks(daapi.getState())
                     window.corSociety.applyPortraitOverlays()
                   } catch (err) {
                     console.warn(err)
@@ -5397,6 +5594,23 @@
           value = String(value || '')
           if (/^[A-Za-z0-9+/=]+$/.test(value.slice(0, 160)) && value.length > 120) {
             return 'data:image/svg+xml;base64,' + value
+          }
+          return value
+        },
+        absoluteImageHref(value) {
+          value = this.imageHref(value)
+          if (!value || value.indexOf('data:image/') === 0 || value.indexOf('http') === 0 || value.indexOf('blob:') === 0) {
+            return value
+          }
+          try {
+            if (typeof document !== 'undefined' && document.baseURI) {
+              return new URL(value, document.baseURI).href
+            }
+            if (typeof window !== 'undefined' && window.location && window.location.href) {
+              return new URL(value, window.location.href).href
+            }
+          } catch (err) {
+            return value
           }
           return value
         },
@@ -5463,8 +5677,6 @@
             value.indexOf('blob:') === 0 ||
             value.indexOf('img/') === 0 ||
             value.indexOf('/img/') === 0 ||
-            value.indexOf('icons/') === 0 ||
-            value.indexOf('/icons/') === 0 ||
             /\.(svg|png|jpg|jpeg|webp)(\?|#|$)/i.test(value)
           ) {
             return true
