@@ -465,13 +465,11 @@
         },
         addSocietyCloseOption(options, payload) {
           options = (options || []).slice()
+          // Don't add Close Society button to events that require a decision (disableSocietyClose flag)
           if (payload && payload.disableSocietyClose) {
             return options
           }
-          // Don't add Close Society button to notifications (no message or very short message is notification)
-          if (this.isNotificationModal(payload)) {
-            return options
-          }
+          // Add Close Society button to navigation menus only
           let hasClose = options.some((option) => option && typeof option === 'object' && /^close( society)?$/i.test(String(option.text || '').trim()) && !option.action)
           if (!hasClose) {
             options.push({
@@ -480,30 +478,6 @@
             })
           }
           return options
-        },
-        isNotificationModal(payload) {
-          // Notifications typically have:
-          // - No options or only 1 option
-          // - Shorter message (usually < 100 chars)
-          // - No title or very short title
-          if (!payload) {
-            return false
-          }
-          let options = payload.options || []
-          let message = String((payload.message || '')).trim()
-          let title = String((payload.title || '')).trim()
-          
-          // If no options or only 1 option, likely a notification
-          if (options.length <= 1) {
-            return true
-          }
-          
-          // If very short message, likely a notification
-          if (message.length < 80 && options.length < 2) {
-            return true
-          }
-          
-          return false
         },
         decorateModalOptions(options, payload) {
           return (options || []).map((option) => this.decorateModalOption(option, payload)).filter(Boolean)
@@ -2561,6 +2535,7 @@
           if (event === 'officeCampaign') {
             this.pushModal({
               corTranslatorPretranslateNow: true,
+              disableSocietyClose: true,
               title: 'House seeks office',
               message: 'House: ' + house.name + '\nThis house is gathering support for a magistracy. They ask whether your household will be seen beside them.',
               image: image,
@@ -2589,6 +2564,7 @@
             let weddingCost = this.actionCost(house, 'wedding')
             this.pushModal({
               corTranslatorPretranslateNow: true,
+              disableSocietyClose: true,
               title: 'Wedding politics',
               message: 'House: ' + house.name + '\nThis house invites your household to honor a marriage alliance. A gift would be noticed; absence would be noticed too.',
               image: image,
@@ -2615,6 +2591,7 @@
           } else if (event === 'inheritanceDispute') {
             this.pushModal({
               corTranslatorPretranslateNow: true,
+              disableSocietyClose: true,
               title: 'Inheritance dispute',
               message: 'House: ' + house.name + '\nA dispute inside this house has become public. They ask you to lend judgment and pressure.',
               image: image,
@@ -2643,6 +2620,7 @@
             let offer = this.ventureOffer(house)
             this.pushModal({
               corTranslatorPretranslateNow: true,
+              disableSocietyClose: true,
               title: 'Trade venture',
               message: 'House: ' + house.name + '\nThis house has found a profitable opening and offers you a place in the venture.\nCost: ' + offer.cost + ' cash.\nExpected result: about ' + offer.expected + ' cash in ' + offer.months + ' months if the venture succeeds.',
               image: image,
@@ -2670,6 +2648,7 @@
           } else if (event === 'scandal') {
             this.pushModal({
               corTranslatorPretranslateNow: true,
+              disableSocietyClose: true,
               title: 'House scandal',
               message: 'House: ' + house.name + '\nThis house has been embarrassed by a scandal. You can shield them, exploit it, or let the city talk.',
               image: image,
@@ -2712,6 +2691,7 @@
           this.save(society)
           this.pushModal({
             corTranslatorPretranslateNow: true,
+            disableSocietyClose: true,
             title: 'Rival rumor',
             message: 'House: ' + house.name + '\nYour rivals are whispering that your household has overreached its station. The rumor is small now, but it has teeth.',
             image: this.affairIcon('slander'),
@@ -2745,6 +2725,7 @@
           this.save(society)
           this.pushModal({
             corTranslatorPretranslateNow: true,
+            disableSocietyClose: true,
             title: 'Political opening',
             message: 'House: ' + house.name + '\nA friendly contact suggests a public exchange of support. It would strengthen your network, though it may bind you to their interests.',
             image: this.affairIcon('support'),
@@ -2777,6 +2758,7 @@
           let petitionCost = this.petitionCost(house)
           this.pushModal({
             corTranslatorPretranslateNow: true,
+            disableSocietyClose: true,
             title: 'Local petition',
             message: 'House: ' + house.name + '\nA lesser family connected to this house asks for your help in a local dispute. It is not glamorous politics, but gratitude from the lower orders can travel far.',
             image: this.affairIcon('petition'),
@@ -2808,6 +2790,7 @@
           let invitationCost = this.invitationCost(house)
           this.pushModal({
             corTranslatorPretranslateNow: true,
+            disableSocietyClose: true,
             title: 'Family invitation',
             message: 'House: ' + house.name + '\nThis house invites your household to a public family occasion. Attending would cost time and gifts, but the city notices who stands beside whom.',
             image: this.affairIcon('invitation'),
