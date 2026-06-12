@@ -84,7 +84,7 @@
       }
 
       window.corSociety = {
-        version: '1.1.20',
+        version: '1.1.21',
         event: '/cor_society/engine',
         flag: 'corSocietyState',
         noticeFlag: 'corSocietyInstallNoticeSeen',
@@ -5641,6 +5641,9 @@
             if (attr === 'fill' && this.isProtectedSkinPaintColor(color, protectedSkinColors)) {
               return match
             }
+            if (this.isProtectedAdornmentPaintColor(color, bounds, viewBox, attr)) {
+              return match
+            }
             let key = attr + ':' + color.toLowerCase()
             if (!colorMap[key]) {
               colorMap[key] = this.wardrobePaintReplacement(color, palette, attr === 'stroke', elementIndex)
@@ -5934,6 +5937,9 @@
             maxY: Math.max.apply(Math, ys),
             avgY: sumY / ys.length,
             firstY: ys[0],
+            width: Math.max.apply(Math, xs) - Math.min.apply(Math, xs),
+            height: Math.max.apply(Math, ys) - Math.min.apply(Math, ys),
+            area: (Math.max.apply(Math, xs) - Math.min.apply(Math, xs)) * (Math.max.apply(Math, ys) - Math.min.apply(Math, ys)),
             pointCount: ys.length
           }
         },
@@ -5952,6 +5958,107 @@
             return palette.shade || palette.base
           }
           return elementIndex % 2 === 0 ? palette.base : (palette.shade || palette.base)
+        },
+        isProtectedAdornmentPaintColor(color, bounds, viewBox, attr) {
+          color = String(color || '').toLowerCase()
+          if (!bounds || !this.isVisibleSvgPaintRegion(bounds, viewBox)) {
+            return false
+          }
+          let width = Math.abs(bounds.width || ((bounds.maxX || 0) - (bounds.minX || 0)))
+          let height = Math.abs(bounds.height || ((bounds.maxY || 0) - (bounds.minY || 0)))
+          let viewWidth = Math.max(1, (viewBox && viewBox.width) || 512)
+          let viewHeight = Math.max(1, (viewBox && viewBox.height) || 512)
+          let relativeArea = Math.max(0, width * height) / Math.max(1, viewWidth * viewHeight)
+          let small = (width <= viewWidth * 0.18 && height <= viewHeight * 0.18) || relativeArea <= 0.018
+          let trim = (width <= viewWidth * 0.45 && height <= viewHeight * 0.09) || (width <= viewWidth * 0.12 && height <= viewHeight * 0.38)
+          let tinyDetail = (width <= viewWidth * 0.14 && height <= viewHeight * 0.14) || relativeArea <= 0.010
+          let mediumAdornment = width <= viewWidth * 0.36 && height <= viewHeight * 0.28 && relativeArea <= 0.055
+          let brightGold = {
+            '#f8a814': true,
+            '#f8b53c': true,
+            '#f9cd45': true,
+            '#c98441': true,
+            '#e5aa17': true,
+            '#db9d12': true,
+            '#ffb000': true,
+            '#efac06': true,
+            '#f7b93e': true,
+            '#e0a632': true,
+            '#eac734': true,
+            '#d6aa3c': true,
+            '#c9a24a': true,
+            '#c99a3c': true
+          }
+          let darkGoldDetail = {
+            '#aa6b07': true,
+            '#825308': true,
+            '#4c350c': true,
+            '#9e793c': true,
+            '#c6943c': true,
+            '#cc902f': true
+          }
+          let metalDetail = {
+            '#7f8585': true,
+            '#8f7c59': true,
+            '#8e9293': true,
+            '#979797': true,
+            '#b8a072': true,
+            '#c7bda7': true,
+            '#d0d5d5': true,
+            '#d6d2c7': true
+          }
+          if (brightGold[color]) {
+            return small || trim || mediumAdornment
+          }
+          if (darkGoldDetail[color]) {
+            return small || trim
+          }
+          if (metalDetail[color]) {
+            return small || trim
+          }
+          let rgb = this.hexToRgb(color)
+          if (!rgb) {
+            return false
+          }
+          let r = rgb.r / 255
+          let g = rgb.g / 255
+          let b = rgb.b / 255
+          let max = Math.max(r, g, b)
+          let min = Math.min(r, g, b)
+          let delta = max - min
+          let hue = 0
+          if (delta > 0) {
+            if (max === r) {
+              hue = ((g - b) / delta) % 6
+            } else if (max === g) {
+              hue = (b - r) / delta + 2
+            } else {
+              hue = (r - g) / delta + 4
+            }
+            hue *= 60
+            if (hue < 0) {
+              hue += 360
+            }
+          }
+          let saturation = max === 0 ? 0 : delta / max
+          let luminance = this.colorLuminance(color)
+          let goldHue = hue >= 28 && hue <= 58 && saturation >= 0.48 && luminance >= 0.32 && luminance <= 0.86
+          let bronzeHue = hue >= 18 && hue <= 45 && saturation >= 0.40 && luminance >= 0.24 && luminance <= 0.62
+          let gemHue = saturation >= 0.45 &&
+            luminance >= 0.18 &&
+            luminance <= 0.72 &&
+            ((hue >= 190 && hue <= 265) || (hue >= 280 && hue <= 345) || hue <= 15 || (hue >= 95 && hue <= 170))
+          let metalHue = saturation <= 0.14 && luminance >= 0.38 && luminance <= 0.86
+          if (goldHue && (tinyDetail || trim)) {
+            return true
+          }
+          if (bronzeHue && tinyDetail) {
+            return true
+          }
+          if ((gemHue || metalHue) && (tinyDetail || trim)) {
+            return true
+          }
+          return false
         },
         isProtectedSkinPaintColor(color, protectedSkinColors) {
           color = String(color || '').toLowerCase()
