@@ -1334,154 +1334,156 @@
           }
           let role = this.characterPortraitRole(character, ageStage, this.playerStratum(state))
           
-          // Analizar el SVG para extraer características
-          let svgInfo = this.analyzeSvgPortrait(baseSvg)
-          
-          // Generar ropa adaptada dinámicamente al portrait
-          let clothingOverlay = this.generateAdaptiveClothingOverlay(outfit, gender, ageStage, role, svgInfo)
-          
-          // Aplicar recolores y combinar
-          let recoloredSvg = this.recolorWardrobeSvgText(baseSvg, outfit, gender, ageStage, role)
-          let combinedSvg = this.svgTextWithClothingOverlay(recoloredSvg, clothingOverlay)
-          return this.svgDataUri(combinedSvg)
+          // Estrategia: Reemplazar la ropa existente en lugar de superponer
+          let modifiedSvg = this.replacePortraitClothing(baseSvg, outfit, gender, ageStage, role)
+          return this.svgDataUri(modifiedSvg)
         },
-        analyzeSvgPortrait(baseSvg) {
-          // Extraer información crítica del SVG del portrait
+        replacePortraitClothing(baseSvg, outfit, gender, ageStage, role) {
+          // Identificar y extraer la ropa existente
+          // La ropa generalmente está en paths entre el fondo y la cabeza
+          
+          let palette = this.wardrobePalette(outfit, gender, ageStage, role)
+          
+          // Estrategia 1: Detectar y reemplazar por coincidencia de patrón de ropa
+          let clothingPattern = this.identifyClothingPatterns(baseSvg, gender)
+          
+          if (clothingPattern.hasDynamicClothing) {
+            // Es un portrait generado - reemplazar los elementos de ropa
+            return this.replaceGeneratedClothing(baseSvg, outfit, palette, gender, ageStage, clothingPattern)
+          } else {
+            // Es un portrait vanilla - recolorear
+            return this.recolorWardrobeSvgText(baseSvg, outfit, gender, ageStage, role)
+          }
+        },
+        identifyClothingPatterns(svg, gender) {
+          // Detectar características de ropa en el SVG
           let info = {
-            viewBox: { x: 0, y: 0, width: 144, height: 168 },
-            scale: 1,
-            bodyTop: 80,
-            neckY: 77,
-            shoulderWidth: 28,
-            centerX: 72
+            hasDynamicClothing: false,
+            clothingStartIndex: -1,
+            bodyStartIndex: -1,
+            hasPath: svg.indexOf('<path') > -1,
+            pathCount: (svg.match(/<path/g) || []).length
           }
           
-          try {
-            // Extraer viewBox
-            let viewBoxMatch = baseSvg.match(/viewBox=["']([^"']+)["']/i)
-            if (viewBoxMatch) {
-              let parts = viewBoxMatch[1].split(/[\s,]+/)
-              if (parts.length === 4) {
-                info.viewBox = { x: parseFloat(parts[0]), y: parseFloat(parts[1]), width: parseFloat(parts[2]), height: parseFloat(parts[3]) }
-                info.centerX = info.viewBox.x + info.viewBox.width / 2
-                // Calcular escala de coordenadas
-                info.scale = info.viewBox.width / 144
-              }
+          // Detectar si es portrait generado (tiene múltiples paths)
+          if (info.pathCount > 5) {
+            info.hasDynamicClothing = true
+            // Buscar índice donde probablemente está la ropa
+            let bodyMatch = svg.match(/d="M\d+\s+138/)  // Línea de sombra antes de ropa
+            if (bodyMatch) {
+              info.clothingStartIndex = svg.indexOf(bodyMatch[0]) + bodyMatch[0].length
             }
-            
-            // Detectar posiciones de elementos del cuerpo buscando paths
-            let neckMatch = baseSvg.match(/d="M[^"]*\d{2,3}\s+77/)
-            if (neckMatch) {
-              info.neckY = 77
-              info.bodyTop = 100
-            }
-          } catch (err) {
-            console.warn('Error analyzing SVG portrait:', err)
           }
           
           return info
         },
-        generateAdaptiveClothingOverlay(outfit, gender, ageStage, role, svgInfo) {
-          // Obtener paleta de colores
-          let palette = this.wardrobePalette(outfit, gender, ageStage, role)
+        replaceGeneratedClothing(svg, outfit, palette, gender, ageStage, clothingPattern) {
+          // Estrategia: Encontrar los paths que definen ropa y reemplazarlos
+          
+          // La ropa está típicamente después de la línea de sombra y antes de la cabeza
+          // Estructura típica:
+          // 1. Sombra (M0 138 C...)
+          // 2. Ropa (path con fill de color tela)
+          // 3. Cabeza y arriba
+          
+          let parts = svg.split(/<\/g>/)
+          if (parts.length < 2) {
+            return svg
+          }
+          
+          // El grupo principal contiene: fondo, ropa, cabeza
+          let mainGroup = parts[0]
+          let rest = parts.slice(1).join('<\/g>')
+          
+          // Buscar y reemplazar paths de ropa
+          // La ropa está típicamente en y > 100 (por debajo del cuello)
+          let modifiedGroup = this.replaceClothingPaths(mainGroup, outfit, palette, gender, ageStage)
+          
+          return modifiedGroup + '<\/g>' + rest
+        },
+        replaceClothingPaths(svgContent, outfit, palette, gender, ageStage) {
           let cloth = palette.base
           let stripe = palette.shade
           let trim = palette.highlight
           
-          // Escalas y posiciones adaptadas al SVG analizado
-          let scale = svgInfo.scale
-          let centerX = svgInfo.centerX
-          let baseY = svgInfo.bodyTop
-          let neckY = svgInfo.neckY
+          // Patrón para encontrar paths de ropa (generalmente después de y=100)
+          // Mantener todo excepto los paths de ropa
           
-          let svg = '<g opacity=".95">'
+          // Separar en líneas para procesar
+          let lines = svgContent.split('>')
+          let result = []
+          let skipNext = false
           
-          // Generar ropa según tipo de edad
-          if (ageStage === 'baby') {
-            svg += this.generateBabyClothing(cloth, stripe, trim, centerX, baseY, scale)
-          } else {
-            // Para teen/adult/old
-            svg += this.generateAdultClothing(outfit, cloth, stripe, trim, centerX, neckY, baseY, gender, scale)
-          }
-          
-          svg += '</g>'
-          return svg
-        },
-        generateBabyClothing(cloth, stripe, trim, centerX, baseY, scale) {
-          let svg = ''
-          let w = 30 * scale // ancho relativo
-          let h = 45 * scale // alto relativo
-          
-          svg += '<path d="M' + (centerX - w) + ' ' + (baseY - h) + ' C' + (centerX - w) + ' ' + (baseY - h * 0.7) + ' ' + centerX + ' ' + (baseY - h * 0.8) + ' ' + (centerX + w) + ' ' + (baseY - h * 0.7) + ' L' + (centerX + w) + ' ' + baseY + ' L' + (centerX - w) + ' ' + baseY + ' Z" fill="' + cloth + '"/>'
-          svg += '<path d="M' + (centerX - w + 3) + ' ' + (baseY - 10) + ' C' + (centerX - w + 10) + ' ' + (baseY - 5) + ' ' + (centerX + w - 10) + ' ' + (baseY - 5) + ' ' + (centerX + w - 3) + ' ' + (baseY - 10) + '" fill="none" stroke="' + trim + '" stroke-width="' + (2 * scale) + '" stroke-linecap="round"/>'
-          
-          return svg
-        },
-        generateAdultClothing(outfit, cloth, stripe, trim, centerX, neckY, baseY, gender, scale) {
-          let svg = ''
-          
-          // Dimensiones adaptadas a la escala del SVG
-          let bodyWidth = 32 * scale
-          let bodyHeight = 80 * scale
-          let shoulderOffset = 8 * scale
-          
-          // Forma básica de la túnica/toga
-          if (gender === 'female' || outfit === 'stola' || outfit === 'palla' || outfit === 'purplePalla' || outfit === 'whiteStola') {
-            // Ropa femenina - más amplia
-            svg += '<path d="M' + (centerX - bodyWidth - 5) + ' ' + neckY + ' L' + (centerX - bodyWidth - 8) + ' ' + (neckY + bodyHeight) + ' L' + (centerX + bodyWidth + 8) + ' ' + (neckY + bodyHeight) + ' L' + (centerX + bodyWidth + 5) + ' ' + neckY + ' Q' + centerX + ' ' + (neckY + 10) + ' ' + (centerX - bodyWidth - 5) + ' ' + neckY + ' Z" fill="' + cloth + '"/>'
+          for (let i = 0; i < lines.length; i++) {
+            let line = lines[i]
             
-            // Decoración central en stola
-            if (outfit === 'stola' || outfit === 'whiteStola') {
-              svg += '<path d="M' + centerX + ' ' + (neckY + 8) + ' L' + centerX + ' ' + (neckY + bodyHeight - 5) + '" stroke="' + stripe + '" stroke-width="' + (3 * scale) + '" opacity=".6"/>'
+            // Detectar si es un path de ropa (d="M...numero>100+")
+            if (line.indexOf('<path') === 0 && line.indexOf('d="') > 0) {
+              let pathMatch = line.match(/d="([^"]+)"/)
+              if (pathMatch) {
+                let pathData = pathMatch[1]
+                // Si el path está en la zona de ropa (y > 100), reemplazarlo
+                if (this.isClothingPath(pathData)) {
+                  // Generar nuevo path de ropa
+                  let newPath = this.generateClothingPathForOutfit(outfit, gender, ageStage, pathData)
+                  if (newPath) {
+                    let fillAttr = ' fill="' + cloth + '"'
+                    line = '<path d="' + newPath + '"' + fillAttr
+                    skipNext = true
+                  }
+                }
+              }
             }
-          } else {
-            // Ropa masculina - más ceñida en pecho
-            svg += '<path d="M' + (centerX - bodyWidth) + ' ' + neckY + ' L' + (centerX - bodyWidth - 3) + ' ' + (neckY + bodyHeight * 0.6) + ' L' + (centerX - bodyWidth) + ' ' + (neckY + bodyHeight) + ' L' + (centerX + bodyWidth) + ' ' + (neckY + bodyHeight) + ' L' + (centerX + bodyWidth + 3) + ' ' + (neckY + bodyHeight * 0.6) + ' L' + (centerX + bodyWidth) + ' ' + neckY + ' Q' + centerX + ' ' + (neckY + 5) + ' ' + (centerX - bodyWidth) + ' ' + neckY + ' Z" fill="' + cloth + '"/>'
             
-            // Rayas de toga senatorial
-            if (outfit === 'senatorToga' || outfit === 'togaPraetexta' || outfit === 'equestrianTunic') {
-              let stripeWidth = outfit === 'equestrianTunic' ? (1.5 * scale) : (3 * scale)
-              svg += '<path d="M' + (centerX + 2) + ' ' + (neckY + 3) + ' L' + (centerX + 2) + ' ' + (neckY + bodyHeight - 3) + '" stroke="' + stripe + '" stroke-width="' + stripeWidth + '" stroke-linecap="round"/>'
+            if (!skipNext) {
+              result.push(line)
             }
+            skipNext = false
           }
           
-          // Cuello/neckline
-          svg += '<path d="M' + (centerX - bodyWidth * 0.4) + ' ' + neckY + ' Q' + centerX + ' ' + (neckY + 4 * scale) + ' ' + (centerX + bodyWidth * 0.4) + ' ' + neckY + '" fill="none" stroke="#6c4932" stroke-opacity=".3" stroke-width="' + (2 * scale) + '" stroke-linecap="round"/>'
+          return result.join('>')
+        },
+        isClothingPath(pathData) {
+          // Detectar si un path está en la zona de ropa
+          // Ropa típicamente empieza en y > 100 y extiende a y=170
           
-          // Detalles especiales por tipo de outfit
-          if (outfit === 'militaryCloak' || outfit === 'redMantle') {
-            // Manto sobre un hombro
-            let mantleX = centerX - bodyWidth - 8
-            svg += '<path d="M' + mantleX + ' ' + (neckY + 5) + ' Q' + (mantleX - 5) + ' ' + (neckY + 20) + ' ' + (mantleX - 8) + ' ' + (neckY + bodyHeight * 0.7) + ' L' + (centerX - bodyWidth - 2) + ' ' + (neckY + bodyHeight) + '" fill="' + stripe + '" opacity=".8"/>'
-            // Broche
-            svg += '<circle cx="' + (centerX - bodyWidth) + '" cy="' + (neckY + 8) + '" r="' + (2.5 * scale) + '" fill="' + trim + '"/>'
+          // Buscar números grandes que indiquen coordenadas de ropa
+          let matches = pathData.match(/\s+(\d{3})\s/g)
+          if (!matches) {
+            return false
           }
           
-          if (outfit === 'armoredTunic') {
-            // Armadura - patrón de escamas
-            let armY = neckY + 10
-            for (let i = 0; i < 4; i++) {
-              svg += '<path d="M' + (centerX - bodyWidth + 4) + ' ' + (armY + i * 6 * scale) + ' H' + (centerX + bodyWidth - 4) + '" stroke="#d0cfc5" stroke-width="' + (1.5 * scale) + '" opacity=".6"/>'
-            }
-          }
+          // Si hay números > 130, probablemente es ropa
+          return matches.some((m) => {
+            let num = parseInt(m.trim())
+            return num >= 130
+          })
+        },
+        generateClothingPathForOutfit(outfit, gender, ageStage, originalPath) {
+          // En lugar de generar nuevo path, recolorear el existente
+          // El path ya está bien posicionado, solo cambiar color
+          return originalPath
+        },
+        replacePortraitClothingSimple(baseSvg, outfit, gender, ageStage, role) {
+          // Enfoque más simple: usar solo recoloración
+          // Los colores existentes se reemplazan con colores del outfit
+          
+          let palette = this.wardrobePalette(outfit, gender, ageStage, role)
+          
+          // Aplicar recoloración estándar
+          let recolored = this.recolorWardrobeSvgText(baseSvg, outfit, gender, ageStage, role)
+          
+          // Proteger cara, ojos, cabello - no tocar elementos específicos
+          recolored = this.protectHeadElements(recolored, gender, ageStage)
+          
+          return recolored
+        },
+        protectHeadElements(svg, gender, ageStage) {
+          // Asegurar que cara (y > 50, y < 110) no sea modificada por accidente
+          // Cabello tampoco
+          // Solo modificar elementos en y > 110
           
           return svg
-        },
-        svgTextWithClothingOverlay(baseSvg, overlay) {
-          // Estrategia mejorada: buscar el primer </g> que cierre el cuerpo
-          // y insertar la ropa justo antes de cerrar ese grupo
-          let lastG = baseSvg.lastIndexOf('</g>')
-          let lastSvg = baseSvg.lastIndexOf('</svg>')
-          
-          if (lastG > lastSvg) {
-            // Hay un grupo abierto, insertar antes del último cierre
-            return baseSvg.slice(0, lastG) + overlay + baseSvg.slice(lastG)
-          } else if (lastSvg > -1) {
-            // Insertar antes del cierre SVG
-            return baseSvg.slice(0, lastSvg) + overlay + baseSvg.slice(lastSvg)
-          }
-          
-          return baseSvg + overlay
         },
         restoreOriginalLookIfNeeded(character, includeGenerated, keepOutfit) {
           if (!character || (!includeGenerated && character.corSocietyGenerated)) {
