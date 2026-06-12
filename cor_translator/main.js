@@ -55,7 +55,8 @@
         defaultConfig: {
           sourceLang: 'en',
           targetLang: 'es',
-          mode: 'learn',
+          mode: 'paused',
+          enabled: false,
           scanIntervalMs: 700,
           requestDelayMs: 175,
           pretranslateConcurrency: 4,
@@ -253,7 +254,7 @@
           daapi[name].__corTranslatorVersion = this.version
         },
         handleModalPush(original, thisArg, payload) {
-          if (!payload || this.config.mode === 'paused') {
+          if (!payload || !this.config.enabled || this.config.mode === 'paused') {
             return original.call(thisArg, payload)
           }
           if (this.shouldPretranslateModalPayload(payload)) {
@@ -278,7 +279,7 @@
           return result
         },
         prepareModalPayload(payload) {
-          if (!payload || this.config.mode === 'paused') {
+          if (!payload || !this.config.enabled || this.config.mode === 'paused') {
             return payload
           }
           ;['title', 'message', 'tooltip'].forEach((field) => {
@@ -314,7 +315,7 @@
           return payload
         },
         prepareModalPayloadAsync(payload) {
-          if (!payload || this.config.mode === 'paused') {
+          if (!payload || !this.config.enabled || this.config.mode === 'paused') {
             return Promise.resolve(payload)
           }
           let jobs = []
@@ -726,6 +727,7 @@
         canFetchTranslations() {
           return (
             this.config &&
+            this.config.enabled &&
             (this.config.mode === 'learn' || this.isIntensiveActive()) &&
             window.fetch &&
             this.config.targetLang &&
@@ -1375,6 +1377,22 @@
                 }
               },
               {
+                variant: 'success',
+                text: 'Activate translation',
+                action: {
+                  event: this.event,
+                  method: 'activateTranslation'
+                }
+              },
+              {
+                variant: 'warning',
+                text: 'Deactivate translation',
+                action: {
+                  event: this.event,
+                  method: 'deactivateTranslation'
+                }
+              },
+              {
                 text: 'Close'
               }
             ]
@@ -1402,6 +1420,22 @@
           }
           this.saveConfig()
           this.scheduleScan(50)
+        },
+        activateTranslation() {
+          this.config.enabled = true
+          this.config.mode = 'learn'
+          this.config.intensiveUntil = 0
+          this.saveConfig()
+          this.scanDocument()
+          this.openSettings()
+        },
+        deactivateTranslation() {
+          this.config.enabled = false
+          this.config.mode = 'paused'
+          this.config.intensiveUntil = 0
+          this.restoreOriginals()
+          this.saveConfig()
+          this.openSettings()
         },
         learnVisibleNow() {
           this.config.mode = 'learn'
@@ -1604,6 +1638,18 @@
         daapi.invokeMethod({ event: '/cor_translator/main', method: 'boot' })
       }
       window.corTranslator.setMode(args || {})
+    },
+    activateTranslation() {
+      if (!window.corTranslator) {
+        daapi.invokeMethod({ event: '/cor_translator/main', method: 'boot' })
+      }
+      window.corTranslator.activateTranslation()
+    },
+    deactivateTranslation() {
+      if (!window.corTranslator) {
+        daapi.invokeMethod({ event: '/cor_translator/main', method: 'boot' })
+      }
+      window.corTranslator.deactivateTranslation()
     },
     learnVisibleNow() {
       window.corTranslator.learnVisibleNow()

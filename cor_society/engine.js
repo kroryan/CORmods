@@ -1333,7 +1333,155 @@
             return this.generatedCharacterPortrait({ ...baseCharacter, corSocietyOutfit: outfit }, state)
           }
           let role = this.characterPortraitRole(character, ageStage, this.playerStratum(state))
-          return this.svgDataUri(this.recolorWardrobeSvgText(baseSvg, outfit, gender, ageStage, role))
+          
+          // Analizar el SVG para extraer características
+          let svgInfo = this.analyzeSvgPortrait(baseSvg)
+          
+          // Generar ropa adaptada dinámicamente al portrait
+          let clothingOverlay = this.generateAdaptiveClothingOverlay(outfit, gender, ageStage, role, svgInfo)
+          
+          // Aplicar recolores y combinar
+          let recoloredSvg = this.recolorWardrobeSvgText(baseSvg, outfit, gender, ageStage, role)
+          let combinedSvg = this.svgTextWithClothingOverlay(recoloredSvg, clothingOverlay)
+          return this.svgDataUri(combinedSvg)
+        },
+        analyzeSvgPortrait(baseSvg) {
+          // Extraer información crítica del SVG del portrait
+          let info = {
+            viewBox: { x: 0, y: 0, width: 144, height: 168 },
+            scale: 1,
+            bodyTop: 80,
+            neckY: 77,
+            shoulderWidth: 28,
+            centerX: 72
+          }
+          
+          try {
+            // Extraer viewBox
+            let viewBoxMatch = baseSvg.match(/viewBox=["']([^"']+)["']/i)
+            if (viewBoxMatch) {
+              let parts = viewBoxMatch[1].split(/[\s,]+/)
+              if (parts.length === 4) {
+                info.viewBox = { x: parseFloat(parts[0]), y: parseFloat(parts[1]), width: parseFloat(parts[2]), height: parseFloat(parts[3]) }
+                info.centerX = info.viewBox.x + info.viewBox.width / 2
+                // Calcular escala de coordenadas
+                info.scale = info.viewBox.width / 144
+              }
+            }
+            
+            // Detectar posiciones de elementos del cuerpo buscando paths
+            let neckMatch = baseSvg.match(/d="M[^"]*\d{2,3}\s+77/)
+            if (neckMatch) {
+              info.neckY = 77
+              info.bodyTop = 100
+            }
+          } catch (err) {
+            console.warn('Error analyzing SVG portrait:', err)
+          }
+          
+          return info
+        },
+        generateAdaptiveClothingOverlay(outfit, gender, ageStage, role, svgInfo) {
+          // Obtener paleta de colores
+          let palette = this.wardrobePalette(outfit, gender, ageStage, role)
+          let cloth = palette.base
+          let stripe = palette.shade
+          let trim = palette.highlight
+          
+          // Escalas y posiciones adaptadas al SVG analizado
+          let scale = svgInfo.scale
+          let centerX = svgInfo.centerX
+          let baseY = svgInfo.bodyTop
+          let neckY = svgInfo.neckY
+          
+          let svg = '<g opacity=".95">'
+          
+          // Generar ropa según tipo de edad
+          if (ageStage === 'baby') {
+            svg += this.generateBabyClothing(cloth, stripe, trim, centerX, baseY, scale)
+          } else {
+            // Para teen/adult/old
+            svg += this.generateAdultClothing(outfit, cloth, stripe, trim, centerX, neckY, baseY, gender, scale)
+          }
+          
+          svg += '</g>'
+          return svg
+        },
+        generateBabyClothing(cloth, stripe, trim, centerX, baseY, scale) {
+          let svg = ''
+          let w = 30 * scale // ancho relativo
+          let h = 45 * scale // alto relativo
+          
+          svg += '<path d="M' + (centerX - w) + ' ' + (baseY - h) + ' C' + (centerX - w) + ' ' + (baseY - h * 0.7) + ' ' + centerX + ' ' + (baseY - h * 0.8) + ' ' + (centerX + w) + ' ' + (baseY - h * 0.7) + ' L' + (centerX + w) + ' ' + baseY + ' L' + (centerX - w) + ' ' + baseY + ' Z" fill="' + cloth + '"/>'
+          svg += '<path d="M' + (centerX - w + 3) + ' ' + (baseY - 10) + ' C' + (centerX - w + 10) + ' ' + (baseY - 5) + ' ' + (centerX + w - 10) + ' ' + (baseY - 5) + ' ' + (centerX + w - 3) + ' ' + (baseY - 10) + '" fill="none" stroke="' + trim + '" stroke-width="' + (2 * scale) + '" stroke-linecap="round"/>'
+          
+          return svg
+        },
+        generateAdultClothing(outfit, cloth, stripe, trim, centerX, neckY, baseY, gender, scale) {
+          let svg = ''
+          
+          // Dimensiones adaptadas a la escala del SVG
+          let bodyWidth = 32 * scale
+          let bodyHeight = 80 * scale
+          let shoulderOffset = 8 * scale
+          
+          // Forma básica de la túnica/toga
+          if (gender === 'female' || outfit === 'stola' || outfit === 'palla' || outfit === 'purplePalla' || outfit === 'whiteStola') {
+            // Ropa femenina - más amplia
+            svg += '<path d="M' + (centerX - bodyWidth - 5) + ' ' + neckY + ' L' + (centerX - bodyWidth - 8) + ' ' + (neckY + bodyHeight) + ' L' + (centerX + bodyWidth + 8) + ' ' + (neckY + bodyHeight) + ' L' + (centerX + bodyWidth + 5) + ' ' + neckY + ' Q' + centerX + ' ' + (neckY + 10) + ' ' + (centerX - bodyWidth - 5) + ' ' + neckY + ' Z" fill="' + cloth + '"/>'
+            
+            // Decoración central en stola
+            if (outfit === 'stola' || outfit === 'whiteStola') {
+              svg += '<path d="M' + centerX + ' ' + (neckY + 8) + ' L' + centerX + ' ' + (neckY + bodyHeight - 5) + '" stroke="' + stripe + '" stroke-width="' + (3 * scale) + '" opacity=".6"/>'
+            }
+          } else {
+            // Ropa masculina - más ceñida en pecho
+            svg += '<path d="M' + (centerX - bodyWidth) + ' ' + neckY + ' L' + (centerX - bodyWidth - 3) + ' ' + (neckY + bodyHeight * 0.6) + ' L' + (centerX - bodyWidth) + ' ' + (neckY + bodyHeight) + ' L' + (centerX + bodyWidth) + ' ' + (neckY + bodyHeight) + ' L' + (centerX + bodyWidth + 3) + ' ' + (neckY + bodyHeight * 0.6) + ' L' + (centerX + bodyWidth) + ' ' + neckY + ' Q' + centerX + ' ' + (neckY + 5) + ' ' + (centerX - bodyWidth) + ' ' + neckY + ' Z" fill="' + cloth + '"/>'
+            
+            // Rayas de toga senatorial
+            if (outfit === 'senatorToga' || outfit === 'togaPraetexta' || outfit === 'equestrianTunic') {
+              let stripeWidth = outfit === 'equestrianTunic' ? (1.5 * scale) : (3 * scale)
+              svg += '<path d="M' + (centerX + 2) + ' ' + (neckY + 3) + ' L' + (centerX + 2) + ' ' + (neckY + bodyHeight - 3) + '" stroke="' + stripe + '" stroke-width="' + stripeWidth + '" stroke-linecap="round"/>'
+            }
+          }
+          
+          // Cuello/neckline
+          svg += '<path d="M' + (centerX - bodyWidth * 0.4) + ' ' + neckY + ' Q' + centerX + ' ' + (neckY + 4 * scale) + ' ' + (centerX + bodyWidth * 0.4) + ' ' + neckY + '" fill="none" stroke="#6c4932" stroke-opacity=".3" stroke-width="' + (2 * scale) + '" stroke-linecap="round"/>'
+          
+          // Detalles especiales por tipo de outfit
+          if (outfit === 'militaryCloak' || outfit === 'redMantle') {
+            // Manto sobre un hombro
+            let mantleX = centerX - bodyWidth - 8
+            svg += '<path d="M' + mantleX + ' ' + (neckY + 5) + ' Q' + (mantleX - 5) + ' ' + (neckY + 20) + ' ' + (mantleX - 8) + ' ' + (neckY + bodyHeight * 0.7) + ' L' + (centerX - bodyWidth - 2) + ' ' + (neckY + bodyHeight) + '" fill="' + stripe + '" opacity=".8"/>'
+            // Broche
+            svg += '<circle cx="' + (centerX - bodyWidth) + '" cy="' + (neckY + 8) + '" r="' + (2.5 * scale) + '" fill="' + trim + '"/>'
+          }
+          
+          if (outfit === 'armoredTunic') {
+            // Armadura - patrón de escamas
+            let armY = neckY + 10
+            for (let i = 0; i < 4; i++) {
+              svg += '<path d="M' + (centerX - bodyWidth + 4) + ' ' + (armY + i * 6 * scale) + ' H' + (centerX + bodyWidth - 4) + '" stroke="#d0cfc5" stroke-width="' + (1.5 * scale) + '" opacity=".6"/>'
+            }
+          }
+          
+          return svg
+        },
+        svgTextWithClothingOverlay(baseSvg, overlay) {
+          // Estrategia mejorada: buscar el primer </g> que cierre el cuerpo
+          // y insertar la ropa justo antes de cerrar ese grupo
+          let lastG = baseSvg.lastIndexOf('</g>')
+          let lastSvg = baseSvg.lastIndexOf('</svg>')
+          
+          if (lastG > lastSvg) {
+            // Hay un grupo abierto, insertar antes del último cierre
+            return baseSvg.slice(0, lastG) + overlay + baseSvg.slice(lastG)
+          } else if (lastSvg > -1) {
+            // Insertar antes del cierre SVG
+            return baseSvg.slice(0, lastSvg) + overlay + baseSvg.slice(lastSvg)
+          }
+          
+          return baseSvg + overlay
         },
         restoreOriginalLookIfNeeded(character, includeGenerated, keepOutfit) {
           if (!character || (!includeGenerated && character.corSocietyGenerated)) {
@@ -5658,9 +5806,7 @@
           return String(svg || '').replace(new RegExp(escaped, 'gi'), to)
         },
         nativeClothingOverlaySvg(outfit, gender, ageStage, role) {
-          if (ageStage === 'baby') {
-            return '<g opacity=".96"><path d="M142 404 C174 358 223 340 256 340 C292 340 338 358 370 404 L392 512 H120 Z" fill="#efe7d5"/><path d="M158 420 C214 452 294 452 354 420" fill="none" stroke="#b9945d" stroke-width="16" stroke-linecap="round"/></g>'
-          }
+          // Paletas de color por outfit
           let colors = {
             senatorToga: ['#f7f0e4', '#8b1f35', '#d8c8ad'],
             togaPraetexta: ['#f5ecdc', '#7b2140', '#d6c6aa'],
@@ -5682,31 +5828,50 @@
             childStola: ['#dec58f', '#9d7340', '#bd9860'],
             childTunic: ['#d0b17b', '#836038', '#ad8450']
           }
+          
           let palette = colors[outfit] || (role === 'senatorial' ? colors.senatorToga : role === 'worker' ? colors.workerTunic : colors.citizenToga)
           let cloth = palette[0]
           let stripe = palette[1]
           let trim = palette[2]
-          let neckline = gender === 'female' ? 'M224 332 C236 358 276 358 288 332' : 'M220 332 C240 350 272 350 292 332'
+          
+          // Para bebés - escala 512x512 (viewBox diferente)
+          if (ageStage === 'baby') {
+            return '<g opacity=".96"><path d="M142 404 C174 358 223 340 256 340 C292 340 338 358 370 404 L392 512 H120 Z" fill="' + cloth + '"/><path d="M158 420 C214 452 294 452 354 420" fill="none" stroke="' + trim + '" stroke-width="16" stroke-linecap="round"/></g>'
+          }
+          
+          // Para teen, adult, old - escala 144x168 (viewBox diferente)
+          let neckline = gender === 'female' ? 'M56 77 C60 83 84 83 88 77' : 'M52 77 C60 85 84 85 92 77'
           let svg = '<g opacity=".97">'
-          svg += '<path d="M76 512 L100 408 C126 354 191 326 256 326 C321 326 386 354 412 408 L436 512 Z" fill="' + cloth + '"/>'
-          svg += '<path d="M100 408 C138 436 184 454 256 454 C328 454 374 436 412 408 L436 512 H76 Z" fill="' + trim + '" opacity=".26"/>'
+          
+          // Cuerpo de ropa base
+          svg += '<path d="M18 168 L24 121 C28 109 44 109 48 121 L54 168 Z" fill="' + cloth + '"/>'
+          
+          // Detalles de fondo
+          svg += '<path d="M24 121 C33 130 42 136 72 136 C102 136 111 130 120 121 L114 168 H30 Z" fill="' + trim + '" opacity=".26"/>'
+          
+          // Ropa adicional según género y tipo
           if (gender === 'female' || outfit === 'stola' || outfit === 'palla' || outfit === 'purplePalla' || outfit === 'whiteStola') {
-            svg += '<path d="M124 512 C146 408 190 348 256 338 C322 348 366 408 388 512 Z" fill="' + cloth + '"/>'
-            svg += '<path d="M145 384 C185 420 219 436 256 436 C293 436 327 420 367 384" fill="none" stroke="' + trim + '" stroke-width="14" stroke-linecap="round" opacity=".85"/>'
+            svg += '<path d="M30 168 C35 121 46 85 72 82 C98 85 109 121 114 168 Z" fill="' + cloth + '"/>'
+            svg += '<path d="M35 93 C45 102 52 105 72 105 C92 105 99 102 109 93" fill="none" stroke="' + trim + '" stroke-width="3" stroke-linecap="round" opacity=".85"/>'
           } else {
-            svg += '<path d="M98 512 C126 430 170 368 246 336 C226 392 209 452 206 512 Z" fill="#fff8ea" opacity=".36"/>'
-            svg += '<path d="M278 334 C322 376 361 429 388 512 H306 C300 452 291 392 278 334 Z" fill="' + cloth + '" opacity=".88"/>'
+            svg += '<path d="M24 168 C30 130 41 89 62 80 C54 95 50 109 49 168 Z" fill="#fff8ea" opacity=".36"/>'
+            svg += '<path d="M67 81 C78 91 87 103 114 168 H72 C70 109 66 95 67 81 Z" fill="' + cloth + '" opacity=".88"/>'
           }
+          
+          // Rayas y detalles según outfit
           if (outfit === 'senatorToga' || outfit === 'togaPraetexta' || outfit === 'equestrianTunic') {
-            svg += '<path d="M288 337 C314 388 334 450 346 512" fill="none" stroke="' + stripe + '" stroke-width="' + (outfit === 'equestrianTunic' ? 12 : 22) + '" stroke-linecap="round"/>'
+            svg += '<path d="M69 81 C76 93 80 108 83 168" fill="none" stroke="' + stripe + '" stroke-width="' + (outfit === 'equestrianTunic' ? 2.8 : 5.2) + '" stroke-linecap="round"/>'
           }
+          
           if (outfit === 'militaryCloak' || outfit === 'redMantle') {
-            svg += '<path d="M91 512 C112 419 159 356 232 334 C204 398 197 455 202 512 Z" fill="' + stripe + '"/><circle cx="211" cy="351" r="14" fill="' + trim + '"/>'
+            svg += '<path d="M22 168 C27 101 38 86 56 81 C49 96 47 109 48 168 Z" fill="' + stripe + '"/><circle cx="51" cy="85" r="3.3" fill="' + trim + '"/>'
           }
+          
           if (outfit === 'armoredTunic') {
-            svg += '<path d="M184 364 H328 L350 512 H162 Z" fill="#8e9293" opacity=".88"/><path d="M184 395 H328 M176 438 H336 M168 481 H344" stroke="#d6d2c7" stroke-width="9" opacity=".75"/>'
+            svg += '<path d="M44 87 H100 L108 168 H38 Z" fill="#8e9293" opacity=".88"/><path d="M44 95 H100 M42 105 H102 M40 116 H104" stroke="#d6d2c7" stroke-width="2.1" opacity=".75"/>'
           }
-          svg += '<path d="' + neckline + '" fill="none" stroke="#6c4932" stroke-opacity=".35" stroke-width="11" stroke-linecap="round"/>'
+          
+          svg += '<path d="' + neckline + '" fill="none" stroke="#6c4932" stroke-opacity=".35" stroke-width="2.5" stroke-linecap="round"/>'
           svg += '</g>'
           return svg
         },
