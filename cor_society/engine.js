@@ -1339,150 +1339,196 @@
           return this.svgDataUri(modifiedSvg)
         },
         replacePortraitClothing(baseSvg, outfit, gender, ageStage, role) {
-          // Identificar y extraer la ropa existente
-          // La ropa generalmente está en paths entre el fondo y la cabeza
-          
           let palette = this.wardrobePalette(outfit, gender, ageStage, role)
-          
-          // Estrategia 1: Detectar y reemplazar por coincidencia de patrón de ropa
-          let clothingPattern = this.identifyClothingPatterns(baseSvg, gender)
-          
-          if (clothingPattern.hasDynamicClothing) {
-            // Es un portrait generado - reemplazar los elementos de ropa
-            return this.replaceGeneratedClothing(baseSvg, outfit, palette, gender, ageStage, clothingPattern)
-          } else {
-            // Es un portrait vanilla - recolorear
-            return this.recolorWardrobeSvgText(baseSvg, outfit, gender, ageStage, role)
-          }
+          return this.analyzeAndReplaceClothing(baseSvg, outfit, palette, gender, ageStage, role)
         },
-        identifyClothingPatterns(svg, gender) {
-          // Detectar características de ropa en el SVG
-          let info = {
-            hasDynamicClothing: false,
-            clothingStartIndex: -1,
-            bodyStartIndex: -1,
-            hasPath: svg.indexOf('<path') > -1,
-            pathCount: (svg.match(/<path/g) || []).length
+        analyzeAndReplaceClothing(svg, outfit, palette, gender, ageStage, role) {
+          // ESTRATEGIA MEJORADA:
+          // Usar análisis de COLOR en lugar de solo coordenadas
+          // Esto permite diferenciar ropa de adornos (oro, metal, etc)
+          
+          // Extraer todos los paths con sus colores
+          let pathRegex = /<path\s+d="([^"]*)"\s+fill="([^"]*)"/g
+          let pathMatch
+          let paths = []
+          
+          while ((pathMatch = pathRegex.exec(svg)) !== null) {
+            paths.push({
+              pathData: pathMatch[1],
+              color: pathMatch[2],
+              fullMatch: pathMatch[0]
+            })
           }
           
-          // Detectar si es portrait generado (tiene múltiples paths)
-          if (info.pathCount > 5) {
-            info.hasDynamicClothing = true
-            // Buscar índice donde probablemente está la ropa
-            let bodyMatch = svg.match(/d="M\d+\s+138/)  // Línea de sombra antes de ropa
-            if (bodyMatch) {
-              info.clothingStartIndex = svg.indexOf(bodyMatch[0]) + bodyMatch[0].length
+          // También buscar paths sin fill que usan atributos stroke (adornos)
+          let strokeRegex = /<path\s+d="([^"]*)"\s+[^>]*stroke="([^"]*)"/g
+          while ((pathMatch = strokeRegex.exec(svg)) !== null) {
+            if (!paths.some((p) => p.fullMatch === pathMatch[0])) {
+              paths.push({
+                pathData: pathMatch[1],
+                color: pathMatch[2],
+                fullMatch: pathMatch[0],
+                isStroke: true
+              })
             }
           }
+          
+          if (paths.length === 0) {
+            // Fallback: recoloración simple
+            return this.recolorWardrobeSvgText(svg, outfit, gender, ageStage, role)
+          }
+          
+          // Clasificar paths por tipo
+          let classified = this.classifyPathsByType(paths)
+          
+          // Reemplazar solo los paths de ropa
+          let newSvg = svg
+          classified.clothingPaths.forEach((pathObj) => {
+            let oldFill = pathObj.color
+            let newFill = palette.base
+            
+            // Usar tonos diferentes para ropa secundaria
+            if (pathObj.isSecondary) {
+              newFill = palette.shade
+            } else if (pathObj.isAccent) {
+              newFill = palette.highlight
+            }
+            
+            let escapedOldFill = oldFill.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+            let colorRegex = new RegExp('fill="' + escapedOldFill + '"', 'g')
+            newSvg = newSvg.replace(colorRegex, 'fill="' + newFill + '"')
+          })
+          
+          return newSvg
+        },
+        classifyPathsByType(paths) {
+          // Clasificar cada path como: ropa, adorno, cara, etc
+          let info = {
+            clothingPaths: [],
+            adornmentPaths: [],
+            headPaths: [],
+            shadowPaths: [],
+            otherPaths: []
+          }
+          
+          // Colores de ADORNOS (NO MODIFICAR)
+          let adornmentColors = [
+            '#d6aa3c', '#c9a24a', '#c99a3c', '#b89a65', // Oro
+            '#7f8585', '#8f7c59', '#b8a072', '#8e9293', '#d0d5d5', '#d6d2c7', '#c7bda7', // Metal/Acero
+            '#9d2e26', '#8b1f35', '#8f1f22', '#9e793c', // Rojo militar
+            '#7c5545', '#7c3d34', '#b06f61', '#8d7567', '#897f79', '#6b6b67', // Ojos/Boca
+            '#263f73'  // Rayas azul marino
+          ]
+          
+          // Colores de CARA/CABELLO (NO MODIFICAR)
+          let faceColors = [
+            '#f7e8a9', '#d8c58f', '#d6b07f', '#d8ad56', '#c8945a', // Piel
+            '#c7c0ad', '#d9c9a6', '#f0d7a0', '#dcc5a7', '#c9b183', '#fff8ea' // Cabello
+          ]
+          
+          // Colores de SOMBRA/FONDO (NO MODIFICAR)  
+          let shadowColors = [
+            '#c4b4a0', '#ccbaa0', '#ccc4b8', '#d0c8b8', '#8d7567',  // Sombra corporal
+            '#e5e0d7', '#e8d8b8', '#ded1bd'  // Fondos
+          ]
+          
+          let debugLog = 'PATHS: '
+          
+          paths.forEach((pathObj, idx) => {
+            let color = pathObj.color.toUpperCase()
+            let pathData = pathObj.pathData || ''
+            let isStroke = pathObj.isStroke
+            
+            // Extraer coordenadas Y del path
+            let coordMatches = pathData.match(/[\s,](\d{1,3})[\s,]/g) || []
+            let yCoords = coordMatches.map((m) => parseInt(m.trim()))
+            let maxY = Math.max.apply(Math, yCoords.length > 0 ? yCoords : [0])
+            let minY = Math.min.apply(Math, yCoords.length > 0 ? yCoords : [0])
+            
+            let classification = 'OTHER'
+            
+            // Stroke = adorno
+            if (isStroke || pathData.indexOf('stroke') > -1) {
+              info.adornmentPaths.push(pathObj)
+              classification = 'ADORN'
+            } else if (this.colorInList(color, adornmentColors)) {
+              info.adornmentPaths.push(pathObj)
+              classification = 'ADORNcol'
+            } else if (this.colorInList(color, faceColors)) {
+              info.headPaths.push(pathObj)
+              classification = 'HEAD'
+            } else if (this.colorInList(color, shadowColors)) {
+              info.shadowPaths.push(pathObj)
+              classification = 'SHADOW'
+            } else if (maxY >= 110 && minY <= 130 && !this.isWhiteOrBlack(color)) {
+              // En zona de ropa (y 110-168) y no es blanco/negro
+              pathObj.isSecondary = maxY >= 145 || pathData.indexOf('opacity') > -1
+              info.clothingPaths.push(pathObj)
+              classification = 'CLOTH'
+            } else if (maxY >= 118 && !this.isWhiteOrBlack(color)) {
+              // Segunda pasada más permisiva
+              let isLikelyClothing = !this.colorInList(color, adornmentColors) && 
+                                     !this.colorInList(color, faceColors) &&
+                                     !this.colorInList(color, shadowColors)
+              if (isLikelyClothing) {
+                pathObj.isSecondary = maxY >= 145 || pathData.indexOf('opacity') > -1
+                info.clothingPaths.push(pathObj)
+                classification = 'CLOTHx'
+              } else {
+                info.otherPaths.push(pathObj)
+              }
+            } else {
+              info.otherPaths.push(pathObj)
+            }
+            
+            debugLog += '[' + idx + ':' + classification + ':' + color.substring(1, 7) + '] '
+          })
+          
+          try {
+            console.warn('WARDROBE_ANALYSIS: ' + debugLog + ' -> Clothing=' + info.clothingPaths.length)
+          } catch (e) {}
           
           return info
         },
-        replaceGeneratedClothing(svg, outfit, palette, gender, ageStage, clothingPattern) {
-          // Estrategia: Encontrar los paths que definen ropa y reemplazarlos
-          
-          // La ropa está típicamente después de la línea de sombra y antes de la cabeza
-          // Estructura típica:
-          // 1. Sombra (M0 138 C...)
-          // 2. Ropa (path con fill de color tela)
-          // 3. Cabeza y arriba
-          
-          let parts = svg.split(/<\/g>/)
-          if (parts.length < 2) {
-            return svg
+        colorInList(color, colorList) {
+          return colorList.some((c) => c.toUpperCase() === color)
+        },
+        isWhiteOrBlack(color) {
+          let col = color.toUpperCase()
+          return col === '#FFFFFF' || col === '#FFF' || col === '#000000' || col === '#000'
+        },
+        identifyClothingPatterns(svg, gender) {
+          // Mantener para compatibilidad (deprecated)
+          return {
+            hasDynamicClothing: svg.indexOf('<path') > -1 && (svg.match(/<path/g) || []).length > 5,
+            hasPath: svg.indexOf('<path') > -1,
+            pathCount: (svg.match(/<path/g) || []).length
           }
-          
-          // El grupo principal contiene: fondo, ropa, cabeza
-          let mainGroup = parts[0]
-          let rest = parts.slice(1).join('<\/g>')
-          
-          // Buscar y reemplazar paths de ropa
-          // La ropa está típicamente en y > 100 (por debajo del cuello)
-          let modifiedGroup = this.replaceClothingPaths(mainGroup, outfit, palette, gender, ageStage)
-          
-          return modifiedGroup + '<\/g>' + rest
+        },
+        replaceGeneratedClothing(svg, outfit, palette, gender, ageStage, clothingPattern) {
+          // Deprecated - usar analyzeAndReplaceClothing
+          return this.analyzeAndReplaceClothing(svg, outfit, palette, gender, ageStage, '')
         },
         replaceClothingPaths(svgContent, outfit, palette, gender, ageStage) {
-          let cloth = palette.base
-          let stripe = palette.shade
-          let trim = palette.highlight
-          
-          // Patrón para encontrar paths de ropa (generalmente después de y=100)
-          // Mantener todo excepto los paths de ropa
-          
-          // Separar en líneas para procesar
-          let lines = svgContent.split('>')
-          let result = []
-          let skipNext = false
-          
-          for (let i = 0; i < lines.length; i++) {
-            let line = lines[i]
-            
-            // Detectar si es un path de ropa (d="M...numero>100+")
-            if (line.indexOf('<path') === 0 && line.indexOf('d="') > 0) {
-              let pathMatch = line.match(/d="([^"]+)"/)
-              if (pathMatch) {
-                let pathData = pathMatch[1]
-                // Si el path está en la zona de ropa (y > 100), reemplazarlo
-                if (this.isClothingPath(pathData)) {
-                  // Generar nuevo path de ropa
-                  let newPath = this.generateClothingPathForOutfit(outfit, gender, ageStage, pathData)
-                  if (newPath) {
-                    let fillAttr = ' fill="' + cloth + '"'
-                    line = '<path d="' + newPath + '"' + fillAttr
-                    skipNext = true
-                  }
-                }
-              }
-            }
-            
-            if (!skipNext) {
-              result.push(line)
-            }
-            skipNext = false
-          }
-          
-          return result.join('>')
+          // Deprecated
+          return svgContent
         },
         isClothingPath(pathData) {
-          // Detectar si un path está en la zona de ropa
-          // Ropa típicamente empieza en y > 100 y extiende a y=170
-          
-          // Buscar números grandes que indiquen coordenadas de ropa
-          let matches = pathData.match(/\s+(\d{3})\s/g)
-          if (!matches) {
-            return false
-          }
-          
-          // Si hay números > 130, probablemente es ropa
-          return matches.some((m) => {
-            let num = parseInt(m.trim())
-            return num >= 130
-          })
+          // Deprecated
+          let matches = pathData.match(/\d{2,3}/g) || []
+          let maxY = Math.max.apply(Math, matches.map((m) => parseInt(m)))
+          return maxY >= 130
         },
         generateClothingPathForOutfit(outfit, gender, ageStage, originalPath) {
-          // En lugar de generar nuevo path, recolorear el existente
-          // El path ya está bien posicionado, solo cambiar color
+          // Deprecated
           return originalPath
         },
         replacePortraitClothingSimple(baseSvg, outfit, gender, ageStage, role) {
-          // Enfoque más simple: usar solo recoloración
-          // Los colores existentes se reemplazan con colores del outfit
-          
           let palette = this.wardrobePalette(outfit, gender, ageStage, role)
-          
-          // Aplicar recoloración estándar
-          let recolored = this.recolorWardrobeSvgText(baseSvg, outfit, gender, ageStage, role)
-          
-          // Proteger cara, ojos, cabello - no tocar elementos específicos
-          recolored = this.protectHeadElements(recolored, gender, ageStage)
-          
-          return recolored
+          return this.recolorWardrobeSvgText(baseSvg, outfit, gender, ageStage, role)
         },
         protectHeadElements(svg, gender, ageStage) {
-          // Asegurar que cara (y > 50, y < 110) no sea modificada por accidente
-          // Cabello tampoco
-          // Solo modificar elementos en y > 110
-          
+          // La protección ahora está en classifyPathsByType
           return svg
         },
         restoreOriginalLookIfNeeded(character, includeGenerated, keepOutfit) {
