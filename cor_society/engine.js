@@ -1334,94 +1334,71 @@
           }
           let role = this.characterPortraitRole(character, ageStage, this.playerStratum(state))
           
-          // Estrategia: Reemplazar la ropa existente en lugar de superponer
-          let modifiedSvg = this.replacePortraitClothing(baseSvg, outfit, gender, ageStage, role)
+          // Obtener type del character para acceder a la paleta de colores de ROPA
+          let currentLook = originalLook || character.look || {}
+          let type = currentLook.type || 'brown'
+          
+          // Reemplazar SOLO los colores de ropa (tunic, mantle, stripe) 
+          let modifiedSvg = this.replaceClothingColorsOnly(baseSvg, type, outfit, gender, ageStage, role)
           return this.svgDataUri(modifiedSvg)
         },
-        replacePortraitClothing(baseSvg, outfit, gender, ageStage, role) {
-          let palette = this.wardrobePalette(outfit, gender, ageStage, role)
-          return this.analyzeAndReplaceClothing(baseSvg, outfit, palette, gender, ageStage, role)
-        },
-        analyzeAndReplaceClothing(svg, outfit, palette, gender, ageStage, role) {
-          // ESTRATEGIA MEJORADA: Usar POSICIÓN para identificar ropa vs piel
-          // - PIEL: y < 110 (cabeza/cuello) - NUNCA TOCAR
-          // - ROPA: y >= 120 (cuerpo/pies) - MODIFICAR SOLO ESTOS
-          // - ADORNOS: strokes sin fill - NUNCA TOCAR
+        replaceClothingColorsOnly(svg, currentType, outfit, gender, ageStage, role) {
+          // ESTRATEGIA CORRECTA: Reemplazar SOLO los colores de ropa de la paleta actual
+          // con los colores del nuevo outfit
           
-          let pathRegex = /<path\s+d="([^"]*)"\s+fill="([^"]*)"/g
-          let pathMatch
-          let clothingReplacements = []
+          // Paleta de colores ACTUAL (lo que tiene ahora el portrait)
+          let currentPalette = this.portraitPalette(currentType)
           
-          while ((pathMatch = pathRegex.exec(svg)) !== null) {
-            let pathData = pathMatch[1]
-            let fillColor = pathMatch[2]
-            
-            // Extraer TODOS los números del path para detectar posición
-            let allNumbers = pathData.match(/\d+/g) || []
-            let yCoordinates = []
-            
-            // Buscar coordenadas Y (típicamente después de espacios o comas)
-            let yMatches = pathData.match(/[\s,C,L,M,H,V](\d{1,3})/g) || []
-            yMatches.forEach((match) => {
-              let num = parseInt(match.replace(/[^\d]/g, ''))
-              if (!isNaN(num)) {
-                yCoordinates.push(num)
-              }
-            })
-            
-            let maxY = yCoordinates.length > 0 ? Math.max.apply(Math, yCoordinates) : 0
-            let minY = yCoordinates.length > 0 ? Math.min.apply(Math, yCoordinates) : 0
-            
-            // CLASIFICACIÓN POR POSICIÓN FÍSICA:
-            let isStroke = pathData.indexOf('stroke') > -1
-            let isHeadRegion = maxY < 110  // Cabeza/Cara NUNCA MODIFICAR
-            let isClothingRegion = maxY >= 120  // Cuerpo/Ropa MODIFICAR
-            
-            // Solo reemplazar si está en zona de ropa y no es adorno (stroke)
-            if (isClothingRegion && !isStroke && !isHeadRegion) {
-              clothingReplacements.push({
-                oldFill: fillColor,
-                pathData: pathData,
-                minY: minY,
-                maxY: maxY
-              })
-            }
-          }
+          // Paleta del NUEVO outfit
+          let newPalette = this.wardrobePalette(outfit, gender, ageStage, role)
           
-          // Ahora reemplazar SOLO los colores identificados como ropa
-          let newSvg = svg
+          let modifiedSvg = svg
           
-          // Deduplicar: reemplazar cada color único solo una vez
-          let processedColors = {}
-          clothingReplacements.forEach((replacement) => {
-            if (!processedColors[replacement.oldFill]) {
-              let escapedColor = replacement.oldFill.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-              let colorRegex = new RegExp('fill="' + escapedColor + '"', 'g')
+          // Reemplazar SOLO los colores de ropa (tunic, mantle, stripe)
+          // NO tocar: skin, hair, shadow, blush, etc.
+          let colorReplacements = [
+            { oldColor: currentPalette.tunic, newColor: newPalette.base, label: 'tunic' },
+            { oldColor: currentPalette.mantle, newColor: newPalette.shade, label: 'mantle' },
+            { oldColor: currentPalette.stripe, newColor: newPalette.highlight, label: 'stripe' }
+          ]
+          
+          let debugMsg = 'WARDROBE_COLORS: '
+          let replacementsCount = 0
+          
+          colorReplacements.forEach((replacement) => {
+            if (replacement.oldColor && replacement.newColor) {
+              let escapedOldColor = replacement.oldColor.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
               
-              // Determinar qué color usar según posición
-              let newColor = palette.base
-              if (replacement.maxY >= 145) {
-                // Parte inferior: usar shade/mantle
-                newColor = palette.shade
-              }
+              // Reemplazar en fill="..."
+              let fillRegex = new RegExp('fill="' + escapedOldColor + '"', 'g')
+              let beforeCount = (modifiedSvg.match(fillRegex) || []).length
+              modifiedSvg = modifiedSvg.replace(fillRegex, 'fill="' + replacement.newColor + '"')
               
-              newSvg = newSvg.replace(colorRegex, 'fill="' + newColor + '"')
-              processedColors[replacement.oldFill] = newColor
+              // Reemplazar en stroke="..."
+              let strokeRegex = new RegExp('stroke="' + escapedOldColor + '"', 'g')
+              modifiedSvg = modifiedSvg.replace(strokeRegex, 'stroke="' + replacement.newColor + '"')
+              
+              if (beforeCount > 0) {
+                debugMsg += '[' + replacement.label + ':' + replacement.oldColor + '->' + replacement.newColor + 'x' + beforeCount + '] '
+                replacementsCount += beforeCount
+              }
             }
           })
           
+          debugMsg += '(total: ' + replacementsCount + ' colors changed)'
+          
           try {
-            let debugMsg = 'WARDROBE_REPLACE: Found ' + clothingReplacements.length + ' clothing paths. Colors replaced: '
-            Object.keys(processedColors).forEach((oldCol) => {
-              debugMsg += '[' + oldCol + '->' + processedColors[oldCol] + '] '
-            })
             console.warn(debugMsg)
           } catch (e) {}
           
-          return newSvg
+          return modifiedSvg
+        },
+        replacePortraitClothing(baseSvg, outfit, gender, ageStage, role) {
+          // DEPRECATED
+          return baseSvg
         },
         classifyPathsByType(paths) {
-          // Clasificar cada path como: ropa, adorno, cara, etc
+          // DEPRECATED
           let info = {
             clothingPaths: [],
             adornmentPaths: [],
