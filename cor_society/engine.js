@@ -468,6 +468,10 @@
           if (payload && payload.disableSocietyClose) {
             return options
           }
+          // Don't add Close Society button to notifications (no message or very short message is notification)
+          if (this.isNotificationModal(payload)) {
+            return options
+          }
           let hasClose = options.some((option) => option && typeof option === 'object' && /^close( society)?$/i.test(String(option.text || '').trim()) && !option.action)
           if (!hasClose) {
             options.push({
@@ -476,6 +480,30 @@
             })
           }
           return options
+        },
+        isNotificationModal(payload) {
+          // Notifications typically have:
+          // - No options or only 1 option
+          // - Shorter message (usually < 100 chars)
+          // - No title or very short title
+          if (!payload) {
+            return false
+          }
+          let options = payload.options || []
+          let message = String((payload.message || '')).trim()
+          let title = String((payload.title || '')).trim()
+          
+          // If no options or only 1 option, likely a notification
+          if (options.length <= 1) {
+            return true
+          }
+          
+          // If very short message, likely a notification
+          if (message.length < 80 && options.length < 2) {
+            return true
+          }
+          
+          return false
         },
         decorateModalOptions(options, payload) {
           return (options || []).map((option) => this.decorateModalOption(option, payload)).filter(Boolean)
