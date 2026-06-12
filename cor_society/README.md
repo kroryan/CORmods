@@ -2,6 +2,10 @@
 
 Roman Society adds a living social layer to Citizen of Rome.
 
+## Design Rule
+
+Roman Society prioritizes performance, stability, and visual quality over compatibility with older internal versions of the mod. When an older Society save format conflicts with Android stability or clean integration, the mod repairs or discards the old Society-only data instead of preserving risky behavior.
+
 ## Features
 
 - Adds a global `Roman Society` action and does not add a character action, keeping entry points predictable on Android.
@@ -13,7 +17,7 @@ Roman Society adds a living social layer to Citizen of Rome.
 - Gives generated characters vanilla Citizen of Rome traits through `daapi.addTrait`.
 - Generates persistent Roman-style house shields for the player and every known NPC house.
 - Adds a separate global `House Shield` action for editing the player's shield without cluttering the Society menus.
-- Adds a global `Family Wardrobe` action with its own wardrobe icon for changing household clothing, with outfit availability tied to the player's Society order.
+- Adds a global `Family Wardrobe` action with its own wardrobe icon for changing household clothing tint, with outfit availability tied to the player's Society order.
 - Bundles compatible standalone actions inside Society so they do not need separate installation: Play As, Attempt Murder, animal stealing events, Disinherit, Restore Inheritance, and optional desktop DevTools access.
 - Tracks persistent relationships, favors, rivalries, patronage, trade ties, allies, rivals, and past affairs.
 - Splits allies/patrons and rivals into separate paged menus with matching overview counts and contextual Back navigation.
@@ -51,7 +55,7 @@ Generated people are created with the game's own `daapi.generateCharacter` flow.
 
 Generated characters are given a real game character ID and a vanilla Roman base `look`, so the game can recognize them as normal characters. Children inherit the base look type from parents with small variation, and portraits age by stage without losing that inherited visual base.
 
-The wardrobe stores a manual `corSocietyOutfit` on the selected household member and preserves the original vanilla `look` in `corSocietyOriginalLook`. While a manual outfit is active, Society registers a complete DAAPI portrait look in `cor_society_wardrobe` so vanilla character screens can render the changed portrait. Choosing `Automatic` restores the preserved vanilla look. Older saves that still have a previous `cor_society` DAAPI portrait look are migrated back to their stored vanilla `corSocietyOriginalLook`.
+Citizen of Rome portraits are complete bundled SVG illustrations selected from `character.look.group`, `character.look.type`, gender, and age stage. They are not assembled from separate clothing layers at runtime. For Android stability, the wardrobe does not persist a custom DAAPI `look` on characters. It stores only a lightweight `corSocietyOutfit` choice and applies a post-load vanilla-SVG clothing recolor where possible. Choosing `Automatic` clears that Society outfit choice. If an older Society build left a risky `cor_society` or `cor_society_wardrobe` look on a character, the current mod repairs it back to a vanilla Roman look during startup.
 
 Generated traits use vanilla trait keys from the official example mod documentation, such as `senator`, `educated`, `literate`, `honorable`, `ambitious`, `gregarious`, `strong`, and `sly`.
 

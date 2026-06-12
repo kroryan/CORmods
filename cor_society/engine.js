@@ -76,7 +76,7 @@
   },
   methods: {
     boot() {
-      if (window.corSociety && window.corSociety.version === '1.1.15') {
+      if (window.corSociety && window.corSociety.version === '1.1.16') {
         window.corSociety.ensure()
         window.corSociety.startPlayerCrestOverlay()
         window.corSociety.startPlayerStatusOverlay()
@@ -84,7 +84,7 @@
       }
 
       window.corSociety = {
-        version: '1.1.15',
+        version: '1.1.16',
         event: '/cor_society/engine',
         flag: 'corSocietyState',
         noticeFlag: 'corSocietyInstallNoticeSeen',
@@ -292,6 +292,7 @@
           if (!state || !state.current) {
             return this.createState()
           }
+          this.repairUnsafeWardrobeLooks(state)
           let society = this.load()
           let ensureKey = this.ensureKey(society, state)
           if (!options || !options.force) {
@@ -310,7 +311,6 @@
           this.ensureCrests(society, state)
           this.syncPlayerSocietyStatus(society, state)
           this.restoreSocietyPortraitLooks(state)
-          this.registerWardrobePortraitLooks(state)
           this.allowAchievementsWithSociety(state)
           society.lastEnsureKey = this.ensureKey(society, state)
           this.save(society)
@@ -1219,32 +1219,12 @@
         },
         registerSocietyPortraitLooks(society, state) {
           this.restoreSocietyPortraitLooks(state)
-          this.registerWardrobePortraitLooks(state)
+          this.repairUnsafeWardrobeLooks(state)
         },
         restoreSocietyPortraitLooks(state) {
-          if (!state || !state.characters) {
-            return
-          }
-          for (let characterId in state.characters) {
-            if (!state.characters.hasOwnProperty(characterId)) {
-              continue
-            }
-            let character = state.characters[characterId]
-            if (
-              character &&
-              character.look &&
-              (
-                character.look.group === 'cor_society' ||
-                (character.look.group === this.wardrobeLookGroup && !character.corSocietyOutfit)
-              ) &&
-              character.corSocietyOriginalLook
-            ) {
-              character.id = character.id || characterId
-              this.restoreOriginalLookIfNeeded(character, true)
-            }
-          }
+          this.repairUnsafeWardrobeLooks(state)
         },
-        registerWardrobePortraitLooks(state) {
+        repairUnsafeWardrobeLooks(state) {
           if (!state || !state.characters) {
             return
           }
@@ -1253,15 +1233,22 @@
               continue
             }
             let character = state.characters[characterId]
-            if (!character || !character.corSocietyOutfit) {
+            if (!character || !character.look) {
+              continue
+            }
+            let lookGroup = character.look.group || ''
+            if (lookGroup !== 'cor_society' && lookGroup !== this.wardrobeLookGroup) {
               continue
             }
             character.id = character.id || characterId
-            this.applyWardrobeLookToCharacter(character, character.corSocietyOutfit, state, true)
+            this.restoreOriginalLookIfNeeded(character, true, true)
           }
         },
+        registerWardrobePortraitLooks(state) {
+          this.repairUnsafeWardrobeLooks(state)
+        },
         characterCloneForSocietyLook(character, gender, ageStage) {
-          let originalLook = character.corSocietyOriginalLook || character.look || {}
+          let originalLook = this.originalLookForWardrobe(character)
           return {
             ...character,
             gender,
@@ -1280,12 +1267,15 @@
           if (!character) {
             return {}
           }
-          if (character.corSocietyOriginalLook) {
+          if (character.corSocietyOriginalLook && character.corSocietyOriginalLook.group && character.corSocietyOriginalLook.type) {
             return { ...character.corSocietyOriginalLook }
           }
           let look = character.look || {}
           if (look.group === this.wardrobeLookGroup || look.group === 'cor_society') {
-            return {}
+            return {
+              group: 'roman',
+              type: 'brown'
+            }
           }
           return { ...look }
         },
@@ -1297,61 +1287,29 @@
             return false
           }
           state = state || daapi.getState()
-          let originalLook = this.originalLookForWardrobe(character)
-          if (!originalLook || !originalLook.group || !originalLook.type) {
-            originalLook = {
-              group: 'roman',
-              type: 'brown'
-            }
+          if (character.look && (character.look.group === this.wardrobeLookGroup || character.look.group === 'cor_society')) {
+            this.restoreOriginalLookIfNeeded(character, true, true)
           }
-          let type = this.wardrobeLookType(character.id, outfit)
-          this.registerWardrobePortraitLook(character, state, outfit, originalLook, type)
-          let newLook = {
-            group: this.wardrobeLookGroup,
-            type,
-            isDAAPI: true
-          }
-          let alreadyApplied = character.look && character.look.group === newLook.group && character.look.type === newLook.type
-          character.corSocietyOriginalLook = originalLook
           character.corSocietyOutfit = outfit
-          character.look = newLook
-          if (silent && alreadyApplied) {
+          character.corSocietyOriginalLook = null
+          if (silent) {
             return true
           }
           try {
             daapi.updateCharacter({
               characterId: character.id,
               character: {
-                look: newLook,
-                corSocietyOriginalLook: originalLook,
+                corSocietyOriginalLook: null,
                 corSocietyOutfit: outfit
               }
             })
-            daapi.forceUpdateCharacterDisplay({ characterId: character.id })
           } catch (err) {
             console.warn(err)
           }
           return true
         },
         registerWardrobePortraitLook(character, state, outfit, originalLook, type) {
-          if (!daapi.addCharacterLook) {
-            return
-          }
-          this.wardrobeCharacterLooks = this.wardrobeCharacterLooks || {}
-          let stages = ['baby', 'teen', 'adult', 'old']
-          let genders = ['male', 'female']
-          let entry = {}
-          genders.forEach((gender) => {
-            entry[gender] = {}
-            stages.forEach((ageStage) => {
-              entry[gender][ageStage] = this.wardrobePortraitDataUri(character, state, outfit, originalLook, gender, ageStage)
-            })
-          })
-          this.wardrobeCharacterLooks[type] = entry
-          daapi.addCharacterLook({
-            group: this.wardrobeLookGroup,
-            types: this.wardrobeCharacterLooks
-          })
+          return
         },
         wardrobePortraitDataUri(character, state, outfit, originalLook, gender, ageStage) {
           let baseCharacter = {
@@ -1366,36 +1324,46 @@
             }
           }
           let basePortrait = this.vanillaCharacterPortrait(baseCharacter, state) || this.genericVanillaCharacterPortrait(baseCharacter, state)
-          let baseHref = this.inlineImageHref(basePortrait) || this.absoluteImageHref(basePortrait)
-          if (!baseHref) {
+          let inlinePortrait = this.inlineImageHref(basePortrait)
+          let baseSvg = this.svgTextFromDataUri(inlinePortrait)
+          if (!baseSvg) {
+            if (basePortrait) {
+              return basePortrait
+            }
             return this.generatedCharacterPortrait({ ...baseCharacter, corSocietyOutfit: outfit }, state)
           }
           let role = this.characterPortraitRole(character, ageStage, this.playerStratum(state))
-          let svg = ''
-          svg += '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="512" height="512" viewBox="0 0 512 512">'
-          svg += '<image href="' + this.escapeSvg(baseHref) + '" xlink:href="' + this.escapeSvg(baseHref) + '" x="0" y="0" width="512" height="512" preserveAspectRatio="xMidYMid meet"/>'
-          svg += this.nativeClothingOverlaySvg(outfit, gender, ageStage, role)
-          svg += '</svg>'
-          return this.svgDataUri(svg)
+          return this.svgDataUri(this.recolorWardrobeSvgText(baseSvg, outfit, gender, ageStage, role))
         },
-        restoreOriginalLookIfNeeded(character, includeGenerated) {
-          if (!character || (!includeGenerated && character.corSocietyGenerated) || !character.corSocietyOriginalLook) {
+        restoreOriginalLookIfNeeded(character, includeGenerated, keepOutfit) {
+          if (!character || (!includeGenerated && character.corSocietyGenerated)) {
             return
           }
+          let update = {
+            corSocietyOriginalLook: null,
+            corSocietyOutfit: keepOutfit ? (character.corSocietyOutfit || '') : ''
+          }
           let originalLook = character.corSocietyOriginalLook
-          character.look = originalLook
+          let hasUnsafeLook = !!(character.look && (character.look.group === this.wardrobeLookGroup || character.look.group === 'cor_society'))
+          if (hasUnsafeLook && (!originalLook || !originalLook.group || !originalLook.type)) {
+            originalLook = {
+              group: 'roman',
+              type: 'brown'
+            }
+          }
+          if (hasUnsafeLook && originalLook && originalLook.group && originalLook.type) {
+            character.look = originalLook
+            update.look = originalLook
+          }
           character.corSocietyOriginalLook = null
-          delete character.corSocietyOutfit
+          if (!keepOutfit) {
+            delete character.corSocietyOutfit
+          }
           try {
             daapi.updateCharacter({
               characterId: character.id,
-              character: {
-                look: originalLook,
-                corSocietyOriginalLook: null,
-                corSocietyOutfit: ''
-              }
+              character: update
             })
-            daapi.forceUpdateCharacterDisplay({ characterId: character.id })
           } catch (err) {
             console.warn(err)
           }
@@ -5577,7 +5545,6 @@
               if (typeof window !== 'undefined' && window.corSociety) {
                 window.setTimeout(() => {
                   try {
-                    window.corSociety.registerWardrobePortraitLooks(daapi.getState())
                     window.corSociety.applyPortraitOverlays()
                   } catch (err) {
                     console.warn(err)
@@ -5613,6 +5580,82 @@
             return value
           }
           return value
+        },
+        svgTextFromDataUri(value) {
+          value = String(value || '')
+          if (value.indexOf('data:image/svg+xml') !== 0) {
+            return ''
+          }
+          let commaIndex = value.indexOf(',')
+          if (commaIndex < 0) {
+            return ''
+          }
+          let meta = value.slice(0, commaIndex)
+          let body = value.slice(commaIndex + 1)
+          try {
+            if (meta.indexOf(';base64') > -1 && typeof atob !== 'undefined') {
+              return atob(body)
+            }
+            return decodeURIComponent(body)
+          } catch (err) {
+            console.warn(err)
+            return ''
+          }
+        },
+        wardrobePalette(outfit, gender, ageStage, role) {
+          let palettes = {
+            senatorToga: { base: '#f6efe3', shade: '#d7cab6', highlight: '#fffaf0', accent: '#8b1f35' },
+            togaPraetexta: { base: '#f4ead9', shade: '#d2c1a8', highlight: '#fff8eb', accent: '#7b2140' },
+            togaCandida: { base: '#fff9ee', shade: '#e4d7c2', highlight: '#ffffff', accent: '#c7b38e' },
+            whiteToga: { base: '#f5eadb', shade: '#d8c9b2', highlight: '#fffaf2', accent: '#b99964' },
+            citizenToga: { base: '#e7d8bf', shade: '#c3a879', highlight: '#f4ead8', accent: '#a57937' },
+            equestrianTunic: { base: '#efe1cb', shade: '#c7a66f', highlight: '#f8eddb', accent: '#263f73' },
+            mantle: { base: '#c3924a', shade: '#8b5d2f', highlight: '#d8af62', accent: '#6b3f24' },
+            simpleTunic: { base: '#d0b17b', shade: '#9b7243', highlight: '#dfc58f', accent: '#6e4d30' },
+            workerTunic: { base: '#a47a4b', shade: '#6e472c', highlight: '#bc9061', accent: '#4f2e1f' },
+            brownMantle: { base: '#7e5736', shade: '#553420', highlight: '#9b7048', accent: '#3f2a1f' },
+            militaryCloak: { base: '#9f2525', shade: '#68191b', highlight: '#bd4938', accent: '#d6aa3c' },
+            armoredTunic: { base: '#9fa3a2', shade: '#6d7173', highlight: '#d2d0c9', accent: '#8f7c59' },
+            redMantle: { base: '#a62624', shade: '#65161a', highlight: '#c74d3b', accent: '#cfa35b' },
+            stola: { base: '#d9bf87', shade: '#aa7f4d', highlight: '#ead3a0', accent: '#8f5f35' },
+            whiteStola: { base: '#f3ead8', shade: '#d4c3a7', highlight: '#fff8ec', accent: '#b99359' },
+            palla: { base: '#bd8d4b', shade: '#86562f', highlight: '#d4aa67', accent: '#744d2b' },
+            purplePalla: { base: '#6e345d', shade: '#3f1f3c', highlight: '#926f9f', accent: '#d6aa3c' },
+            childStola: { base: '#dec58f', shade: '#b28a58', highlight: '#ead9ad', accent: '#9d7340' },
+            childTunic: { base: '#d0b17b', shade: '#9b7243', highlight: '#dfc58f', accent: '#836038' }
+          }
+          if (ageStage === 'baby') {
+            return { base: '#efe7d5', shade: '#d6c7aa', highlight: '#fff7e8', accent: '#b9945d' }
+          }
+          return palettes[outfit] || (role === 'senatorial' ? palettes.senatorToga : role === 'worker' ? palettes.workerTunic : palettes.citizenToga)
+        },
+        recolorWardrobeSvgText(svg, outfit, gender, ageStage, role) {
+          let palette = this.wardrobePalette(outfit, gender, ageStage, role)
+          let groups = [
+            {
+              color: palette.base,
+              targets: ['#ecedef', '#fff4f1', '#dbdcdd', '#e8e8e8', '#efefef', '#f4f0ef', '#dddddd', '#ddd', '#c2c6cc', '#d1c6c6', '#c4b7b7']
+            },
+            {
+              color: palette.shade,
+              targets: ['#e5775a', '#ba5743', '#cca95a', '#c6943c', '#c6a89c', '#897f79', '#b38b7b', '#ae9484', '#b09585', '#a98c7b']
+            },
+            {
+              color: palette.highlight,
+              targets: ['#f7e8a9', '#d8c58f', '#d6b07f', '#d8ad56', '#f2ca70']
+            }
+          ]
+          let output = String(svg || '')
+          groups.forEach((group) => {
+            group.targets.forEach((target) => {
+              output = this.replaceSvgColor(output, target, group.color)
+            })
+          })
+          return output
+        },
+        replaceSvgColor(svg, from, to) {
+          let escaped = String(from || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+          return String(svg || '').replace(new RegExp(escaped, 'gi'), to)
         },
         nativeClothingOverlaySvg(outfit, gender, ageStage, role) {
           if (ageStage === 'baby') {
@@ -6208,9 +6251,24 @@
           if (!state || !state.characters) {
             return
           }
+          if (!this.hasActiveWardrobeOutfits(state)) {
+            this.restoreClearedPortraitOverlays(state)
+            return
+          }
           this.restoreClearedPortraitOverlays(state)
           this.applyCurrentCharacterPortraitOverlay(state)
           this.applyAttributedCharacterPortraitOverlays(state)
+        },
+        hasActiveWardrobeOutfits(state) {
+          if (!state || !state.characters) {
+            return false
+          }
+          for (let characterId in state.characters) {
+            if (state.characters.hasOwnProperty(characterId) && state.characters[characterId] && state.characters[characterId].corSocietyOutfit) {
+              return true
+            }
+          }
+          return false
         },
         restoreClearedPortraitOverlays(state) {
           let images = Array.prototype.slice.call(document.querySelectorAll('img[data-cor-society-original-src]'))
