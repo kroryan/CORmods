@@ -29,6 +29,8 @@ Roman Society prioritizes performance, stability, and visual quality over compat
 - Adds character family navigation through one `Full family tree` button, using a graphical Society family tree with portrait cards, spouse links, children branches, zoom, centering, stable Back navigation, and dark/light theme detection.
 - Lets the player arrange marriages between unmarried adults from their household and NPC houses using the game's marriage API.
 - Includes the current player character as a marriage candidate when they are unmarried, so starts without a spouse and sudden succession cases can still use Society marriages.
+- Lets introduced characters become lovers through private courtship regardless of gender, with rapport, cooldowns, scandal risk, possible pregnancy when biologically possible, and divorce fallout when an exposed affair breaks a marriage.
+- Changes a used `Request introduction` into `Invite home to talk`, so introductions are a one-time social step and later visits become cooldown-limited relationship events.
 - Shows short parenthesized reasons when marriage is unavailable, such as no adult, too high, too low, or required relation.
 - Adds native button tooltips to Society menus and event popups so long-pressing/holding an option shows the expected consequences before confirming it.
 - Restricts marriages by order: one order down, same order, one order up, or two orders up with very high relations.
@@ -61,6 +63,8 @@ Citizen of Rome portraits are complete bundled SVG illustrations selected from `
 Generated traits use vanilla trait keys from the official example mod documentation, such as `senator`, `educated`, `literate`, `honorable`, `ambitious`, `gregarious`, `strong`, and `sly`.
 
 Arranged marriages and AI house marriages call `daapi.performMarriage`, so the resulting spouse relationship should appear in the vanilla family UI after the game refreshes. If the vanilla marriage API rejects a wedding, Society does not fake the spouse link by writing `spouseId` manually; it shows an error and applies no Society effects. Marrying upward improves prestige and influence but costs more; marrying downward can improve practical support and local ties while costing some elite standing.
+
+AI house marriages have a higher monthly pregnancy chance than older Society builds, and pregnancies are attempted through `daapi.impregnate` so the base game can resolve the birth normally. Lover relationships are stored in Society state instead of vanilla `spouseId`; exposed affairs can damage relations, lower stability, cost player prestige/influence, and may clear vanilla spouse links as a divorce when the scandal is severe.
 
 The player's Society order is calculated from the same economic ladder used by the base game: Proletarii, Class V, Class IV, Class III, Class II, Class I, Equites, and Senatores. Novus Homo remains a vanilla heritage value, but Society treats it as a civic-status marker once the household has enough property class to support that rank. The main-screen citizen title is patched visually so it can evolve with Society status while leaving the vanilla data intact for elections and other base-game systems.
 

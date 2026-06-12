@@ -84,7 +84,7 @@
       }
 
       window.corSociety = {
-        version: '1.1.21',
+        version: '1.1.22',
         event: '/cor_society/engine',
         flag: 'corSocietyState',
         noticeFlag: 'corSocietyInstallNoticeSeen',
@@ -375,6 +375,8 @@
               playerOverlay: true
             },
             houseRelations: {},
+            characterSocial: {},
+            romances: {},
             lastProcessedMonth: '',
             log: []
           }
@@ -398,6 +400,8 @@
           society.crests = society.crests || {}
           society.crestSettings = { playerOverlay: true, ...(society.crestSettings || {}) }
           society.houseRelations = society.houseRelations || {}
+          society.characterSocial = society.characterSocial || {}
+          society.romances = society.romances || {}
           society.log = society.log || []
           return society
         },
@@ -431,6 +435,9 @@
             inheritanceDispute: 'familyTree',
             feud: 'influence',
             scandal: 'prestige',
+            romance: 'marriage',
+            lover: 'marriage',
+            divorce: 'rivalry',
             slander: 'influence',
             petition: 'plebeian',
             invitation: 'familyTree',
@@ -556,7 +563,9 @@
           if (method === 'startRivalry') return this.effectLine(['+10 prestige', '+25 influence', 'sets relation to -65 or worse', 'starts rivalry'])
           if (method === 'reconcile') return this.effectLine([this.changeText('cash', -this.actionCost(house || {}, 'reconcile')), '-20 influence', '+38 house relation', 'may end rivalry'])
           if (method === 'praisePerson') return this.effectLine(['+3 prestige', '+6 house relation'])
-          if (method === 'requestIntroduction') return this.effectLine(['+35 influence', '-3 house relation', 'possible +1 favor'])
+          if (method === 'requestIntroduction') return this.effectLine(['+35 influence', '-3 house relation', 'possible +1 favor', 'unlocks private visits and courtship'])
+          if (method === 'inviteHomeTalk') return this.effectLine(['+4 to +12 personal rapport', '+2 to +8 house relation', '4 month cooldown', 'small chance of gossip'])
+          if (method === 'courtCharacter') return this.effectLine(['may start or deepen a lover relationship', '+rapport on success', '6 month cooldown on failure', 'risk of scandal if either lover is married'])
           if (method === 'spreadRumor') return this.effectLine(['usually +35 influence, +5 prestige, -22 house relation', 'if exposed: -15 prestige, -35 relation, rivalry'])
           if (method === 'answerSlander') return this.effectLine(['-35 influence', '+4 prestige', '-8 house relation', '+2 house heat'])
           if (method === 'ignoreSlander') return this.effectLine(['-10 prestige', 'lowers house heat'])
@@ -1485,6 +1494,8 @@
           this.syncPlayerWorldEffects(society, state)
           this.simulateHouseTurns(society, state)
           this.simulateInterHouseAffairs(society, state)
+          this.maybeStartNpcRomance(society, state)
+          this.simulateRomances(society, state)
           this.resolvePendingVentures(society, state)
           this.driftRelations(society)
           this.applyNetworkModifiers(society)
@@ -1678,7 +1689,7 @@
           if (!house || !house.memberIds || !house.memberIds.length) {
             return
           }
-          let marriageChance = house.agenda === 'marriage' ? 0.08 : 0.025
+          let marriageChance = house.agenda === 'marriage' ? 0.12 : 0.04
           if (Math.random() < marriageChance) {
             let candidates = (houses || []).filter((other) => {
               if (!other || other.id === house.id || !other.memberIds || !other.memberIds.length) {
@@ -1692,7 +1703,7 @@
               return
             }
           }
-          let pregnancyChance = house.agenda === 'marriage' ? 0.09 : 0.035
+          let pregnancyChance = house.agenda === 'marriage' ? 0.18 : 0.08
           if (Math.random() < pregnancyChance) {
             this.tryHousePregnancy(society, state, house)
           }
@@ -1800,7 +1811,7 @@
             return false
           }
           let couple = this.pick(couples)
-          let chance = 1 / Math.max(1, couple.children + 1)
+          let chance = this.clamp(0.86 - couple.children * 0.13, 0.16, 0.86)
           if (Math.random() > chance) {
             return false
           }
@@ -1839,6 +1850,285 @@
             }
           }
           return count
+        },
+        maybeStartNpcRomance(society, state) {
+          if (Math.random() > 0.10) {
+            return false
+          }
+          let houses = this.sortedHouses(society).filter((house) => house.memberIds && house.memberIds.length)
+          if (houses.length < 2) {
+            return false
+          }
+          let firstHouse = this.pick(houses)
+          let secondHouse = this.pick(houses.filter((house) => house.id !== firstHouse.id))
+          if (!firstHouse || !secondHouse) {
+            return false
+          }
+          let firstCandidates = this.romanceCandidatesForHouse(firstHouse, state)
+          let secondCandidates = this.romanceCandidatesForHouse(secondHouse, state)
+          if (!firstCandidates.length || !secondCandidates.length) {
+            return false
+          }
+          let first = this.pick(firstCandidates)
+          let secondPool = secondCandidates.filter((character) => {
+            return character && !this.sameCharacterId(character.id, first.id) && !this.getRomance(society, first.id, character.id)
+          })
+          if (!secondPool.length) {
+            return false
+          }
+          let second = this.pick(secondPool)
+          let romance = this.createRomance(society, first.id, second.id, {
+            source: 'npc',
+            intensity: this.randomInt(18, 42),
+            secrecy: this.romanceBaseRisk(first, second, state)
+          })
+          firstHouse.lastFamilyEvent = 'A private attachment begins near ' + secondHouse.name + '.'
+          secondHouse.lastFamilyEvent = 'A private attachment begins near ' + firstHouse.name + '.'
+          if (romance.secrecy >= 45 && Math.random() < 0.25) {
+            this.log(society, 'Rumors whisper of a private attachment between ' + firstHouse.name + ' and ' + secondHouse.name + '.', 'romance', firstHouse.id)
+          }
+          return true
+        },
+        romanceCandidatesForHouse(house, state) {
+          return this.visibleHousePeople(house, state)
+            .map((characterId) => {
+              let character = state.characters[characterId]
+              if (character) {
+                character.id = character.id || characterId
+              }
+              return character
+            })
+            .filter((character) => {
+              if (!character || character.isDead) {
+                return false
+              }
+              let age = this.age(character, state)
+              return age >= 16 && age <= 58
+            })
+        },
+        simulateRomances(society, state) {
+          society.romances = society.romances || {}
+          let keys = Object.keys(society.romances)
+          keys.forEach((key) => {
+            let romance = society.romances[key]
+            if (!romance || romance.status !== 'active') {
+              return
+            }
+            let first = state.characters[romance.firstId]
+            let second = state.characters[romance.secondId]
+            if (!first || !second || first.isDead || second.isDead) {
+              delete society.romances[key]
+              return
+            }
+            first.id = first.id || romance.firstId
+            second.id = second.id || romance.secondId
+            romance.months = (romance.months || 0) + 1
+            romance.intensity = this.clamp((romance.intensity || 25) + this.randomInt(-2, 4), 1, 100)
+            romance.secrecy = this.clamp((romance.secrecy || 20) + this.randomInt(-1, 3), 0, 100)
+            if (this.tryRomancePregnancy(society, state, romance, first, second)) {
+              romance.intensity = this.clamp((romance.intensity || 25) + 6, 1, 100)
+            }
+            if (Math.random() < this.romanceScandalChance(romance, first, second, state)) {
+              this.revealRomanceScandal(society, state, romance, first, second)
+            } else if (Math.random() < 0.08) {
+              let firstHouse = this.houseForPortraitCharacter(first, society)
+              let secondHouse = this.houseForPortraitCharacter(second, society)
+              if (firstHouse && secondHouse && firstHouse.id !== secondHouse.id) {
+                this.changeHouseRelation(society, firstHouse.id, secondHouse.id, this.randomInt(-2, 4))
+              }
+            }
+            if (romance.intensity <= 3 && Math.random() < 0.25) {
+              romance.status = 'ended'
+              romance.ended = this.monthKey(state)
+            }
+          })
+        },
+        romanceBaseRisk(first, second, state) {
+          let risk = 12
+          if (first && first.spouseId && !this.sameCharacterId(first.spouseId, second && second.id)) risk += 28
+          if (second && second.spouseId && !this.sameCharacterId(second.spouseId, first && first.id)) risk += 28
+          let firstAge = this.age(first || {}, state)
+          let secondAge = this.age(second || {}, state)
+          if (firstAge < 18 || secondAge < 18) risk += 8
+          return this.clamp(risk, 5, 88)
+        },
+        romanceScandalChance(romance, first, second, state) {
+          if (!romance || romance.status !== 'active') {
+            return 0
+          }
+          if (romance.lastScandalMonth && this.monthIndex(this.monthKey(state)) - this.monthIndex(romance.lastScandalMonth) < 12) {
+            return 0
+          }
+          let risk = 0.01 + (romance.secrecy || 0) / 900 + (romance.intensity || 0) / 1800
+          if (first && first.spouseId && !this.sameCharacterId(first.spouseId, second && second.id)) risk += 0.045
+          if (second && second.spouseId && !this.sameCharacterId(second.spouseId, first && first.id)) risk += 0.045
+          return this.clamp(risk, 0.005, 0.18)
+        },
+        romanceCanConceive(first, second, state) {
+          if (!first || !second || this.characterIsMale(first) === this.characterIsMale(second)) {
+            return false
+          }
+          let mother = this.characterIsMale(first) ? second : first
+          let father = this.characterIsMale(first) ? first : second
+          let age = this.age(mother, state)
+          if (age < 16 || age > 42 || mother.startedPregnancyTime || mother.flagCannotGetPregnant || father.flagCannotImpregnate === false) {
+            return false
+          }
+          return { mother, father }
+        },
+        tryRomancePregnancy(society, state, romance, first, second) {
+          let parents = this.romanceCanConceive(first, second, state)
+          if (!parents) {
+            return false
+          }
+          let chance = this.clamp(0.015 + (romance.intensity || 20) / 1400, 0.015, 0.085)
+          if (Math.random() > chance) {
+            return false
+          }
+          try {
+            daapi.impregnate({
+              characterId: parents.mother.id,
+              fatherId: parents.father.id
+            })
+            daapi.forceUpdateCharacterDisplay({ characterId: parents.mother.id })
+          } catch (err) {
+            console.warn(err)
+            return false
+          }
+          romance.lastPregnancyMonth = this.monthKey(state)
+          let motherHouse = this.houseForPortraitCharacter(parents.mother, society)
+          let fatherHouse = this.houseForPortraitCharacter(parents.father, society)
+          if (motherHouse) {
+            motherHouse.lastFamilyEvent = this.characterName(parents.mother, state) + ' is expecting a child.'
+          }
+          this.log(society, this.characterName(parents.mother, state) + ' is expecting a child with ' + this.characterName(parents.father, state) + '.', 'birth', motherHouse ? motherHouse.id : (fatherHouse && fatherHouse.id))
+          if ((parents.mother.spouseId && !this.sameCharacterId(parents.mother.spouseId, parents.father.id)) && Math.random() < 0.45) {
+            this.revealRomanceScandal(society, state, romance, first, second)
+          }
+          return true
+        },
+        revealRomanceScandal(society, state, romance, first, second, options) {
+          if (!romance || !first || !second) {
+            return false
+          }
+          romance.discovered = true
+          romance.lastScandalMonth = this.monthKey(state)
+          romance.secrecy = this.clamp((romance.secrecy || 20) - 25, 0, 100)
+          romance.intensity = this.clamp((romance.intensity || 20) - this.randomInt(8, 22), 1, 100)
+          let firstHouse = this.houseForPortraitCharacter(first, society)
+          let secondHouse = this.houseForPortraitCharacter(second, society)
+          if (firstHouse) {
+            firstHouse.heat = (firstHouse.heat || 0) + 2
+            firstHouse.stability = this.clamp((firstHouse.stability || 50) - 8, 0, 100)
+            firstHouse.lastFamilyEvent = 'A lover scandal embarrasses the house.'
+          }
+          if (secondHouse && (!firstHouse || secondHouse.id !== firstHouse.id)) {
+            secondHouse.heat = (secondHouse.heat || 0) + 2
+            secondHouse.stability = this.clamp((secondHouse.stability || 50) - 8, 0, 100)
+            secondHouse.lastFamilyEvent = 'A lover scandal embarrasses the house.'
+          }
+          if (firstHouse && secondHouse && firstHouse.id !== secondHouse.id) {
+            this.changeHouseRelation(society, firstHouse.id, secondHouse.id, -this.randomInt(10, 28))
+          }
+          let divorces = []
+          ;[
+            { lover: first, other: second },
+            { lover: second, other: first }
+          ].forEach((pair) => {
+            if (pair.lover.spouseId && !this.sameCharacterId(pair.lover.spouseId, pair.other.id)) {
+              let chance = (romance.intensity || 25) >= 55 ? 0.55 : 0.34
+              if (Math.random() < chance && this.divorceCharacterFromSpouse(state, pair.lover)) {
+                divorces.push(pair.lover)
+              }
+            }
+          })
+          let playerInvolved = this.romanceInvolvesPlayer(romance, state)
+          if (playerInvolved) {
+            this.applyStats({ prestige: -18, influence: -25 })
+          }
+          let message = 'A lover scandal exposes ' + this.characterName(first, state) + ' and ' + this.characterName(second, state) + '.'
+          if (divorces.length) {
+            message += ' Divorce follows in the household.'
+          }
+          this.log(society, message, divorces.length ? 'divorce' : 'scandal', firstHouse ? firstHouse.id : (secondHouse && secondHouse.id))
+          if (playerInvolved && !(options && options.quietPlayerModal)) {
+            this.pushModal({
+              title: divorces.length ? 'Lover scandal and divorce' : 'Lover scandal',
+              message: message + '\nYour prestige and influence suffer.',
+              image: this.affairIcon(divorces.length ? 'divorce' : 'scandal'),
+              options: [
+                {
+                  text: 'Endure the gossip'
+                }
+              ]
+            })
+          }
+          return true
+        },
+        romanceInvolvesPlayer(romance, state) {
+          let currentId = this.currentCharacterId(state)
+          return !!(romance && currentId && (this.sameCharacterId(romance.firstId, currentId) || this.sameCharacterId(romance.secondId, currentId)))
+        },
+        divorceCharacterFromSpouse(state, character) {
+          if (!character || !character.id || !character.spouseId) {
+            return false
+          }
+          let spouseId = character.spouseId
+          let spouse = state.characters && state.characters[spouseId]
+          try {
+            daapi.updateCharacter({
+              characterId: character.id,
+              character: { spouseId: null }
+            })
+            character.spouseId = null
+            if (spouse) {
+              daapi.updateCharacter({
+                characterId: spouseId,
+                character: { spouseId: null }
+              })
+              spouse.spouseId = null
+            }
+            daapi.forceUpdateCharacterDisplay({ characterId: character.id })
+            if (spouse) {
+              daapi.forceUpdateCharacterDisplay({ characterId: spouseId })
+            }
+            return true
+          } catch (err) {
+            console.warn(err)
+            return false
+          }
+        },
+        romanceKey(firstId, secondId) {
+          return this.relationKey(firstId, secondId)
+        },
+        getRomance(society, firstId, secondId) {
+          if (!society || !society.romances || !firstId || !secondId) {
+            return false
+          }
+          let romance = society.romances[this.romanceKey(firstId, secondId)]
+          return romance && romance.status === 'active' ? romance : false
+        },
+        createRomance(society, firstId, secondId, details) {
+          society.romances = society.romances || {}
+          let key = this.romanceKey(firstId, secondId)
+          let existing = society.romances[key]
+          if (existing && existing.status === 'active') {
+            existing.intensity = this.clamp((existing.intensity || 20) + ((details && details.intensity) || 8), 1, 100)
+            return existing
+          }
+          let romance = {
+            id: key,
+            firstId,
+            secondId,
+            status: 'active',
+            started: this.monthKey(daapi.getState()),
+            months: 0,
+            intensity: this.clamp((details && details.intensity) || 28, 1, 100),
+            secrecy: this.clamp((details && details.secrecy) || 18, 0, 100),
+            source: (details && details.source) || 'player'
+          }
+          society.romances[key] = romance
+          return romance
         },
         runHouseEconomy(house) {
           let profile = this.strata[house.stratum] || this.strata.plebeian
@@ -3300,6 +3590,97 @@
             options
           })
         },
+        characterSocialRecord(society, characterId, create) {
+          society.characterSocial = society.characterSocial || {}
+          let key = String(characterId || '')
+          if (!key) {
+            return {}
+          }
+          if (!society.characterSocial[key] && create !== false) {
+            society.characterSocial[key] = {
+              introduced: false,
+              bond: 0,
+              nextInviteMonth: '',
+              nextCourtMonth: '',
+              lastVisitMonth: ''
+            }
+          }
+          return society.characterSocial[key] || {}
+        },
+        socialVisitOption(society, state, house, character, nav) {
+          let characterId = character && character.id
+          let social = this.characterSocialRecord(society, characterId, false)
+          if (!social.introduced) {
+            return {
+              variant: 'info',
+              text: 'Request introduction',
+              disabled: (house.relation || 0) < 10,
+              showDisabledWithTooltip: true,
+              tooltip: 'Warm relations let this person introduce you to useful contacts. This can only be used once for this character.',
+              icons: [this.affairIcon('support')],
+              action: {
+                event: this.event,
+                method: 'requestIntroduction',
+                context: { houseId: house.id, characterId }
+              }
+            }
+          }
+          let cooldown = social.nextInviteMonth && !this.monthKeyReached(social.nextInviteMonth, state)
+          return {
+            variant: 'info',
+            text: 'Invite home to talk',
+            disabled: !!cooldown,
+            showDisabledWithTooltip: true,
+            tooltip: cooldown ? 'This person recently visited. Available again after ' + social.nextInviteMonth + '.' : 'A private household visit can build rapport, improve house relation, and sometimes start a small social event.',
+            icons: [this.affairIcon('invitation')],
+            action: {
+              event: this.event,
+              method: 'inviteHomeTalk',
+              context: { houseId: house.id, characterId }
+            }
+          }
+        },
+        romanceOption(society, state, house, character) {
+          let currentId = this.currentCharacterId(state)
+          let player = state.characters[currentId] || state.current || {}
+          let characterId = character && character.id
+          let social = this.characterSocialRecord(society, characterId, false)
+          let romance = this.getRomance(society, currentId, characterId)
+          let playerAge = this.age(player, state)
+          let targetAge = this.age(character, state)
+          let disabled = false
+          let tooltip = ''
+          if (!currentId || this.sameCharacterId(currentId, characterId)) {
+            disabled = true
+            tooltip = 'You cannot court yourself.'
+          } else if (playerAge < 16 || targetAge < 16) {
+            disabled = true
+            tooltip = 'Both characters must be adults.'
+          } else if (!social.introduced) {
+            disabled = true
+            tooltip = 'Request an introduction first.'
+          } else if (social.nextCourtMonth && !this.monthKeyReached(social.nextCourtMonth, state)) {
+            disabled = true
+            tooltip = 'Courtship is cooling down until ' + social.nextCourtMonth + '.'
+          } else {
+            let risk = this.romanceBaseRisk(player, character, state)
+            tooltip = romance ? 'Meet your lover privately. Higher intensity improves the bond but increases scandal risk.' : 'Attempt to turn rapport into a lover relationship. Works regardless of gender; pregnancy only applies when the couple can conceive.'
+            tooltip += '\nScandal risk: ' + (risk >= 55 ? 'high' : risk >= 30 ? 'moderate' : 'low') + '.'
+          }
+          return {
+            variant: romance ? 'info' : 'danger',
+            text: romance ? 'Meet lover' : 'Court privately',
+            disabled,
+            showDisabledWithTooltip: true,
+            tooltip,
+            icons: [this.affairIcon('romance')],
+            action: {
+              event: this.event,
+              method: 'courtCharacter',
+              context: { houseId: house.id, characterId }
+            }
+          }
+        },
         openPerson({ houseId, characterId, group, page, returnTo, returnPage } = {}) {
           let society = this.ensure()
           let state = daapi.getState()
@@ -3313,10 +3694,16 @@
           let nav = this.navContext(returnTo, returnPage)
           let vanillaActions = this.vanillaCharacterActions(character)
           let relatives = this.familyTreeRelatives(character, state)
+          let currentId = this.currentCharacterId(state)
+          let social = this.characterSocialRecord(society, characterId, false)
+          let romance = this.getRomance(society, currentId, characterId)
           let message = [
             this.characterTooltip(character, state),
             'Spouse: ' + (character.spouseId && state.characters[character.spouseId] ? this.characterName(state.characters[character.spouseId], state) : 'none'),
             'Children: ' + relatives.children.length,
+            'Introduced: ' + (social.introduced ? 'yes' : 'no'),
+            'Rapport: ' + Math.round(social.bond || 0),
+            'Lover: ' + (romance ? ('yes, intensity ' + Math.round(romance.intensity || 0)) : 'no'),
             'House relation: ' + this.signed(house.relation || 0),
             'House favors: ' + (house.favor || 0)
           ].join('\n')
@@ -3367,19 +3754,8 @@
                   context: { houseId, characterId }
                 }
               },
-              {
-                variant: 'info',
-                text: 'Request introduction',
-                disabled: (house.relation || 0) < 10,
-                showDisabledWithTooltip: true,
-                tooltip: 'Warm relations let this person introduce you to useful contacts.',
-                icons: [this.affairIcon('support')],
-                action: {
-                  event: this.event,
-                  method: 'requestIntroduction',
-                  context: { houseId, characterId }
-                }
-              },
+              this.socialVisitOption(society, state, house, character, nav),
+              this.romanceOption(society, state, house, character),
               {
                 variant: 'danger',
                 text: 'Spread rumor',
@@ -4480,13 +4856,201 @@
           this.openPerson({ houseId, characterId })
         },
         requestIntroduction({ houseId, characterId }) {
+          let alreadyIntroduced = false
           this.withHouse(houseId, (society, house) => {
+            let social = this.characterSocialRecord(society, characterId, true)
+            if (social.introduced) {
+              alreadyIntroduced = true
+              return
+            }
+            social.introduced = true
+            social.introductionMonth = this.monthKey(daapi.getState())
+            social.nextInviteMonth = this.futureMonthKey(2)
+            social.bond = this.clamp((social.bond || 0) + this.randomInt(8, 16), -100, 100)
             house.relation = this.clamp((house.relation || 0) - 3, -100, 100)
             house.favor = (house.favor || 0) + (Math.random() < 0.45 ? 1 : 0)
             this.applyStats({ influence: 35 })
             this.log(society, house.name + ' introduces you to useful contacts.')
           })
-          this.openPerson({ houseId, characterId })
+          if (alreadyIntroduced) {
+            this.inviteHomeTalk({ houseId, characterId })
+          } else {
+            this.openPerson({ houseId, characterId })
+          }
+        },
+        inviteHomeTalk({ houseId, characterId }) {
+          let result = false
+          this.withHouse(houseId, (society, house) => {
+            let state = daapi.getState()
+            let character = state.characters[characterId]
+            if (!character) {
+              return
+            }
+            character.id = character.id || characterId
+            let social = this.characterSocialRecord(society, characterId, true)
+            if (!social.introduced) {
+              social.introduced = true
+              social.introductionMonth = this.monthKey(state)
+            }
+            if (social.nextInviteMonth && !this.monthKeyReached(social.nextInviteMonth, state)) {
+              result = {
+                title: 'Visit unavailable',
+                message: this.characterName(character, state) + ' recently visited. Try again after ' + social.nextInviteMonth + '.',
+                image: this.characterPortrait(character, state, house)
+              }
+              return
+            }
+            let rapport = this.randomInt(4, 12)
+            let relation = this.randomInt(2, 8)
+            let gossip = Math.random() < 0.08 + Math.max(0, (house.heat || 0)) * 0.015
+            social.bond = this.clamp((social.bond || 0) + rapport, -100, 100)
+            social.lastVisitMonth = this.monthKey(state)
+            social.nextInviteMonth = this.futureMonthKey(4)
+            house.relation = this.clamp((house.relation || 0) + relation, -100, 100)
+            if (gossip) {
+              house.heat = (house.heat || 0) + 1
+              house.relation = this.clamp((house.relation || 0) - 4, -100, 100)
+              result = {
+                title: 'Household gossip',
+                message: this.characterName(character, state) + ' accepts your hospitality, but servants talk. Rapport improves, though the house becomes warmer with gossip.',
+                image: this.affairIcon('romance')
+              }
+              this.log(society, 'A private visit with ' + this.characterName(character, state) + ' creates gossip around ' + house.name + '.', 'romance', house.id)
+            } else {
+              result = {
+                title: 'Private conversation',
+                message: this.characterName(character, state) + ' spends an evening in conversation. Rapport and house relation improve.',
+                image: this.characterPortrait(character, state, house)
+              }
+              this.log(society, 'You invite ' + this.characterName(character, state) + ' of ' + house.name + ' home to talk.')
+            }
+          })
+          if (result) {
+            this.pushModal({
+              title: result.title,
+              message: result.message,
+              image: result.image,
+              options: [
+                {
+                  text: 'Back',
+                  action: {
+                    event: this.event,
+                    method: 'openPerson',
+                    context: { houseId, characterId }
+                  }
+                }
+              ]
+            })
+          } else {
+            this.openPerson({ houseId, characterId })
+          }
+        },
+        courtCharacter({ houseId, characterId }) {
+          let result = false
+          this.withHouse(houseId, (society, house) => {
+            let state = daapi.getState()
+            let currentId = this.currentCharacterId(state)
+            let player = state.characters[currentId] || state.current
+            let character = state.characters[characterId]
+            if (!player || !character || this.sameCharacterId(currentId, characterId)) {
+              return
+            }
+            player.id = player.id || currentId
+            character.id = character.id || characterId
+            let social = this.characterSocialRecord(society, characterId, true)
+            if (!social.introduced) {
+              result = {
+                title: 'Introduction needed',
+                message: 'You need a proper introduction before attempting something so private.',
+                image: this.characterPortrait(character, state, house)
+              }
+              return
+            }
+            if (social.nextCourtMonth && !this.monthKeyReached(social.nextCourtMonth, state)) {
+              result = {
+                title: 'Courtship cooling down',
+                message: 'This needs time. Try again after ' + social.nextCourtMonth + '.',
+                image: this.characterPortrait(character, state, house)
+              }
+              return
+            }
+            let romance = this.getRomance(society, currentId, characterId)
+            let risk = this.romanceBaseRisk(player, character, state)
+            if (romance) {
+              romance.intensity = this.clamp((romance.intensity || 25) + this.randomInt(6, 16), 1, 100)
+              romance.secrecy = this.clamp((romance.secrecy || risk) + this.randomInt(2, 8), 0, 100)
+              social.bond = this.clamp((social.bond || 0) + this.randomInt(3, 9), -100, 100)
+              social.nextCourtMonth = this.futureMonthKey(3)
+              house.relation = this.clamp((house.relation || 0) + 2, -100, 100)
+              if (Math.random() < this.romanceScandalChance(romance, player, character, state) * 1.5) {
+                this.revealRomanceScandal(society, state, romance, player, character, { quietPlayerModal: true })
+                result = {
+                  title: 'The meeting is discovered',
+                  message: 'The private meeting becomes gossip. The affair survives, but the city notices.',
+                  image: this.affairIcon('scandal')
+                }
+              } else {
+                result = {
+                  title: 'Secret meeting',
+                  message: 'The affair deepens. Intensity rises, but repeated meetings increase the chance of scandal.',
+                  image: this.characterPortrait(character, state, house)
+                }
+                this.log(society, 'You meet secretly with ' + this.characterName(character, state) + ' of ' + house.name + '.', 'romance', house.id)
+              }
+              return
+            }
+            let playerEloquence = player.skills && player.skills.eloquence ? parseFloat(player.skills.eloquence) : 0
+            let chance = 0.32 + (house.relation || 0) / 260 + (social.bond || 0) / 180 + playerEloquence / 260
+            chance = this.clamp(chance, 0.12, 0.82)
+            let success = Math.random() < chance
+            social.nextCourtMonth = this.futureMonthKey(success ? 3 : 6)
+            if (success) {
+              romance = this.createRomance(society, currentId, characterId, {
+                source: 'player',
+                intensity: this.randomInt(24, 42) + Math.max(0, Math.round((social.bond || 0) / 5)),
+                secrecy: risk
+              })
+              social.bond = this.clamp((social.bond || 0) + this.randomInt(8, 18), -100, 100)
+              house.relation = this.clamp((house.relation || 0) + 4, -100, 100)
+              result = {
+                title: 'A private attachment begins',
+                message: this.characterName(character, state) + ' returns your interest. You are now lovers. Gender does not restrict the relationship; pregnancy only applies when biology allows it.',
+                image: this.characterPortrait(character, state, house)
+              }
+              this.log(society, 'A private attachment begins with ' + this.characterName(character, state) + ' of ' + house.name + '.', 'romance', house.id)
+            } else {
+              social.bond = this.clamp((social.bond || 0) - this.randomInt(4, 12), -100, 100)
+              house.relation = this.clamp((house.relation || 0) - this.randomInt(4, 12), -100, 100)
+              result = {
+                title: 'Courtship fails',
+                message: this.characterName(character, state) + ' does not welcome the advance. Rapport and house relation suffer.',
+                image: this.affairIcon('rivalry')
+              }
+              this.log(society, 'A private advance toward ' + this.characterName(character, state) + ' fails.', 'romance', house.id)
+              if ((player.spouseId || character.spouseId) && Math.random() < 0.12) {
+                house.heat = (house.heat || 0) + 1
+              }
+            }
+          })
+          if (result) {
+            this.pushModal({
+              title: result.title,
+              message: result.message,
+              image: result.image,
+              options: [
+                {
+                  text: 'Back',
+                  action: {
+                    event: this.event,
+                    method: 'openPerson',
+                    context: { houseId, characterId }
+                  }
+                }
+              ]
+            })
+          } else {
+            this.openPerson({ houseId, characterId })
+          }
         },
         spreadRumor({ houseId, characterId }) {
           this.withHouse(houseId, (society, house) => {
@@ -7016,6 +7580,12 @@
     },
     requestIntroduction(args) {
       window.corSociety.requestIntroduction(args || {})
+    },
+    inviteHomeTalk(args) {
+      window.corSociety.inviteHomeTalk(args || {})
+    },
+    courtCharacter(args) {
+      window.corSociety.courtCharacter(args || {})
     },
     spreadRumor(args) {
       window.corSociety.spreadRumor(args || {})

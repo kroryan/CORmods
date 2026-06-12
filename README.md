@@ -67,11 +67,12 @@ Roman Society prioritizes performance, stability, and visual quality over compat
 - Exposes vanilla / other mod character actions when a character currently has them
 - Generated Society characters receive vanilla Citizen of Rome traits through the game's trait API
 - Lets the player arrange marriages between their family and NPC houses through the vanilla marriage API, including the current player character when unmarried, without faking spouse links if the vanilla API rejects a wedding
+- Adds one-time introductions, cooldown-limited private visits, and lover relationships regardless of gender, with scandals, possible divorce fallout, and pregnancy only when biologically possible
 - Keeps Society-generated characters on vanilla Roman `look` data; the old Society-only portrait generator has been removed, and the wardrobe stores only a lightweight Society outfit choice with post-load vanilla-SVG recoloring that protects vanilla skin, face-detail, and jewelry/adornment colors
 - Marriage actions show a short unavailable reason in parentheses and affect prestige, influence, revenue, cash, relations, and favors according to social rank
 - Reads the player's real vanilla property class, senatorial flag, and heritage to decide Society order and update the visible citizen title on the main game screen without overwriting vanilla heritage
 - All Society buttons, including event options and global actions, provide hold/long-press tooltips explaining the consequences before pressing
-- Supports gifts, dinners, patronage, political support, trade deals, rivalries, reconciliation, praise, introductions, rumors, and trade ventures that settle after one or two months
+- Supports gifts, dinners, patronage, political support, trade deals, rivalries, reconciliation, praise, introductions, private visits, courtship, rumors, and trade ventures that settle after one or two months
 - Gives houses their own monthly virtual-player simulation with AI cash, influence, prestige, property, agendas, family events, inter-house marriages, pregnancies, inter-house affairs, and social rise/fall
 - Lets large vanilla changes to the player's cash, influence, or prestige shift Society relations, so base-game events can affect the social map too
 - Produces player-facing events such as office campaigns, marriage alliances, inheritance disputes, trade ventures, scandals, petitions, and slander
