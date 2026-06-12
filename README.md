@@ -53,9 +53,11 @@ Roman Society prioritizes performance, stability, and visual quality over compat
 
 **Key Features:**
 - Adds a "Roman Society" global action without adding a separate character action
+- Adds a "Close Society" option to Society modal pages so the Society UI can be closed directly
 - Adds a separate "House Shield" global action for configuring the player's house shield
-- Adds a "Family Wardrobe" global action for vanilla-based Society portrait clothing tint on household members, with outfit availability tied to social order
+- Adds a "Family Wardrobe" global action for safe vanilla-SVG Society portrait clothing tint on household members, with outfit availability tied to social order
 - Bundles Play As, Murder, Stealing From, Disinherit, Restore Inheritance, and optional Open DevTools helpers so Roman Society can be installed as one package
+- Surfaces bundled character actions inside Society's "Vanilla / other mods actions" menu even when the base game has not injected those action buttons yet
 - Groups houses into senatorial, equestrian, civic, plebeian, freedman, and poor orders
 - Seeds generated houses with real game characters at startup, including visible family members, spouse links, and children where age makes sense
 - Prefers young adult generated founders and gives generated people dead parents when missing, so trees have roots while living member lists stay clean

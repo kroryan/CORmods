@@ -76,7 +76,7 @@
   },
   methods: {
     boot() {
-      if (window.corSociety && window.corSociety.version === '1.1.16') {
+      if (window.corSociety && window.corSociety.version === '1.1.17') {
         window.corSociety.ensure()
         window.corSociety.startPlayerCrestOverlay()
         window.corSociety.startPlayerStatusOverlay()
@@ -84,7 +84,7 @@
       }
 
       window.corSociety = {
-        version: '1.1.16',
+        version: '1.1.17',
         event: '/cor_society/engine',
         flag: 'corSocietyState',
         noticeFlag: 'corSocietyInstallNoticeSeen',
@@ -453,8 +453,22 @@
             payload.corTranslatorSkipPretranslate = true
             payload.skipTranslatorPretranslate = true
           }
-          payload.options = this.decorateModalOptions(payload.options || [], payload)
+          payload.options = this.decorateModalOptions(this.addSocietyCloseOption(payload.options || [], payload), payload)
           daapi.pushInteractionModalQueue(payload)
+        },
+        addSocietyCloseOption(options, payload) {
+          options = (options || []).slice()
+          if (payload && payload.disableSocietyClose) {
+            return options
+          }
+          let hasClose = options.some((option) => option && typeof option === 'object' && /^close( society)?$/i.test(String(option.text || '').trim()) && !option.action)
+          if (!hasClose) {
+            options.push({
+              text: 'Close Society',
+              tooltip: 'Consequences: closes this Society window; no stats change.'
+            })
+          }
+          return options
         },
         decorateModalOptions(options, payload) {
           return (options || []).map((option) => this.decorateModalOption(option, payload)).filter(Boolean)
@@ -1323,7 +1337,7 @@
               ageStage
             }
           }
-          let basePortrait = this.vanillaCharacterPortrait(baseCharacter, state) || this.genericVanillaCharacterPortrait(baseCharacter, state)
+          let basePortrait = this.vanillaCharacterPortrait(baseCharacter, state) || this.defaultDetailedRomanPortrait(gender, ageStage) || this.genericVanillaCharacterPortrait(baseCharacter, state)
           let inlinePortrait = this.inlineImageHref(basePortrait)
           let baseSvg = this.svgTextFromDataUri(inlinePortrait)
           if (!baseSvg) {
@@ -1333,65 +1347,15 @@
             return this.generatedCharacterPortrait({ ...baseCharacter, corSocietyOutfit: outfit }, state)
           }
           let role = this.characterPortraitRole(character, ageStage, this.playerStratum(state))
-          
-          // Obtener type del character para acceder a la paleta de colores de ROPA
-          let currentLook = originalLook || character.look || {}
-          let type = currentLook.type || 'brown'
-          
-          // Reemplazar SOLO los colores de ropa (tunic, mantle, stripe) 
-          let modifiedSvg = this.replaceClothingColorsOnly(baseSvg, type, outfit, gender, ageStage, role)
-          return this.svgDataUri(modifiedSvg)
+          return this.svgDataUri(this.recolorWardrobeSvgText(baseSvg, outfit, gender, ageStage, role))
+        },
+        defaultDetailedRomanPortrait(gender, ageStage) {
+          gender = gender === 'female' ? 'female' : 'male'
+          ageStage = ageStage || 'adult'
+          return this.vanillaPortraitAsset('icons/characters/roman/brown/' + gender + '/' + ageStage + '.svg')
         },
         replaceClothingColorsOnly(svg, currentType, outfit, gender, ageStage, role) {
-          // ESTRATEGIA CORRECTA: Reemplazar SOLO los colores de ropa de la paleta actual
-          // con los colores del nuevo outfit
-          
-          // Paleta de colores ACTUAL (lo que tiene ahora el portrait)
-          let currentPalette = this.portraitPalette(currentType)
-          
-          // Paleta del NUEVO outfit
-          let newPalette = this.wardrobePalette(outfit, gender, ageStage, role)
-          
-          let modifiedSvg = svg
-          
-          // Reemplazar SOLO los colores de ropa (tunic, mantle, stripe)
-          // NO tocar: skin, hair, shadow, blush, etc.
-          let colorReplacements = [
-            { oldColor: currentPalette.tunic, newColor: newPalette.base, label: 'tunic' },
-            { oldColor: currentPalette.mantle, newColor: newPalette.shade, label: 'mantle' },
-            { oldColor: currentPalette.stripe, newColor: newPalette.highlight, label: 'stripe' }
-          ]
-          
-          let debugMsg = 'WARDROBE_COLORS: '
-          let replacementsCount = 0
-          
-          colorReplacements.forEach((replacement) => {
-            if (replacement.oldColor && replacement.newColor) {
-              let escapedOldColor = replacement.oldColor.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-              
-              // Reemplazar en fill="..."
-              let fillRegex = new RegExp('fill="' + escapedOldColor + '"', 'g')
-              let beforeCount = (modifiedSvg.match(fillRegex) || []).length
-              modifiedSvg = modifiedSvg.replace(fillRegex, 'fill="' + replacement.newColor + '"')
-              
-              // Reemplazar en stroke="..."
-              let strokeRegex = new RegExp('stroke="' + escapedOldColor + '"', 'g')
-              modifiedSvg = modifiedSvg.replace(strokeRegex, 'stroke="' + replacement.newColor + '"')
-              
-              if (beforeCount > 0) {
-                debugMsg += '[' + replacement.label + ':' + replacement.oldColor + '->' + replacement.newColor + 'x' + beforeCount + '] '
-                replacementsCount += beforeCount
-              }
-            }
-          })
-          
-          debugMsg += '(total: ' + replacementsCount + ' colors changed)'
-          
-          try {
-            console.warn(debugMsg)
-          } catch (e) {}
-          
-          return modifiedSvg
+          return this.recolorWardrobeSvgText(svg, outfit, gender, ageStage, role)
         },
         replacePortraitClothing(baseSvg, outfit, gender, ageStage, role) {
           // DEPRECATED
@@ -5826,15 +5790,15 @@
           let groups = [
             {
               color: palette.base,
-              targets: ['#ecedef', '#fff4f1', '#dbdcdd', '#e8e8e8', '#efefef', '#f4f0ef', '#dddddd', '#ddd', '#c2c6cc', '#d1c6c6', '#c4b7b7']
+              targets: ['#ecedef', '#fff4f1', '#dbdcdd', '#e8e8e8', '#efefef', '#f4f0ef', '#dddddd', '#ddd', '#c2c6cc']
             },
             {
               color: palette.shade,
-              targets: ['#e5775a', '#ba5743', '#cca95a', '#c6943c', '#c6a89c', '#897f79', '#b38b7b', '#ae9484', '#b09585', '#a98c7b']
+              targets: ['#d1c6c6', '#c4b7b7', '#b8a8a8', '#c2b4b4', '#b2a1a1']
             },
             {
               color: palette.highlight,
-              targets: ['#f7e8a9', '#d8c58f', '#d6b07f', '#d8ad56', '#f2ca70']
+              targets: ['#f7d789', '#f2ca70']
             }
           ]
           let output = String(svg || '')
@@ -5850,6 +5814,7 @@
           return String(svg || '').replace(new RegExp(escaped, 'gi'), to)
         },
         nativeClothingOverlaySvg(outfit, gender, ageStage, role) {
+          return ''
           // Paletas de color por outfit
           let colors = {
             senatorToga: ['#f7f0e4', '#8b1f35', '#d8c8ad'],
@@ -6278,10 +6243,118 @@
           return this.affairIcon('familyTree')
         },
         vanillaCharacterActions(character) {
-          let actions = (character && character.actions) || {}
+          let actions = { ...((character && character.actions) || {}) }
+          this.bundledCharacterActions(character).forEach((item) => {
+            if (item && item.key && item.action && !actions[item.key]) {
+              actions[item.key] = item.action
+            }
+          })
           return Object.keys(actions).map((key) => {
             return { key, action: actions[key] }
           }).filter((item) => item.action && typeof item.action === 'object' && !item.action.hideInCharacterActions)
+        },
+        bundledCharacterActions(character) {
+          let state = daapi.getState()
+          let currentId = state && state.current && state.current.id
+          let characterId = character && character.id
+          if (!character || !characterId) {
+            return []
+          }
+          let items = []
+          let isCurrent = characterId === currentId
+          let age = this.age(character, state)
+          if (!isCurrent && !character.isDead) {
+            items.push({
+              key: 'play_as',
+              action: {
+                title: 'Play As',
+                icon: daapi.requireImage('/cor_society/bundled/play_as/switch.svg'),
+                isAvailable: true,
+                hideWhenBusy: false,
+                process: {
+                  event: '/cor_society/bundled/play_as/main',
+                  method: 'process',
+                  context: { characterId }
+                }
+              }
+            })
+          }
+          let currentPlotTarget = currentId ? this.safeCharacterFlag(currentId, 'mod_murder_startedPlotOnTarget') : false
+          if (!isCurrent && !character.isDead && age > 15 && !currentPlotTarget && !this.safeCharacterFlag(characterId, 'mod_murder_plotTarget')) {
+            items.push({
+              key: 'mod_murder_startPlot',
+              action: {
+                title: 'Attempt Murder',
+                icon: daapi.requireImage('/cor_society/bundled/murder/plot.svg'),
+                isAvailable: true,
+                hideWhenBusy: false,
+                process: {
+                  event: '/cor_society/bundled/murder/main',
+                  method: 'process',
+                  context: { characterId }
+                }
+              }
+            })
+          }
+          if (isCurrent && currentPlotTarget) {
+            items.push({
+              key: 'mod_murder_cancelPlot',
+              action: {
+                title: 'Stop Plotting Murder',
+                icon: daapi.requireImage('/cor_society/bundled/murder/cancelPlot.svg'),
+                isAvailable: true,
+                hideWhenBusy: false,
+                process: {
+                  event: '/cor_society/bundled/murder/main',
+                  method: 'cancelPlot'
+                }
+              }
+            })
+          }
+          let householdIds = (state && state.current && state.current.householdCharacterIds) || []
+          let isHousehold = householdIds.indexOf(characterId) >= 0
+          if (isHousehold && !isCurrent && !character.isDead && !character.flagWasGivenInheritance) {
+            items.push({
+              key: 'Disinherit',
+              action: {
+                title: 'Disinherit',
+                icon: daapi.requireImage('/cor_society/bundled/disinheritance/icon.svg'),
+                isAvailable: true,
+                hideWhenBusy: false,
+                process: {
+                  event: '/cor_society/bundled/disinheritance/main',
+                  method: 'process',
+                  context: { characterId }
+                }
+              }
+            })
+          }
+          if (isHousehold && !isCurrent && !character.isDead && character.flagWasGivenInheritance) {
+            items.push({
+              key: 'RestoreInheritance',
+              action: {
+                title: 'Restore Inheritance',
+                icon: daapi.requireImage('/cor_society/bundled/restoreInheritance/icon.svg'),
+                isAvailable: true,
+                hideWhenBusy: false,
+                process: {
+                  event: '/cor_society/bundled/restoreInheritance/main',
+                  method: 'process',
+                  context: { characterId }
+                }
+              }
+            })
+          }
+          return items
+        },
+        safeCharacterFlag(characterId, flag) {
+          try {
+            return daapi.getCharacterFlag({ characterId, flag })
+          } catch (err) {
+            let state = daapi.getState()
+            let character = state && state.characters && state.characters[characterId]
+            return character && character.modFlags ? character.modFlags[flag] : false
+          }
         },
         familyTreeRelatives(character, state) {
           let id = character && character.id
