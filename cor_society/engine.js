@@ -76,7 +76,7 @@
   },
   methods: {
     boot() {
-      if (window.corSociety && window.corSociety.version === '1.1.13') {
+      if (window.corSociety && window.corSociety.version === '1.1.14') {
         window.corSociety.ensure()
         window.corSociety.startPlayerCrestOverlay()
         window.corSociety.startPlayerStatusOverlay()
@@ -84,7 +84,7 @@
       }
 
       window.corSociety = {
-        version: '1.1.13',
+        version: '1.1.14',
         event: '/cor_society/engine',
         flag: 'corSocietyState',
         noticeFlag: 'corSocietyInstallNoticeSeen',
@@ -218,7 +218,7 @@
           this.ensureGeneratedLooks(society, state)
           this.ensureCrests(society, state)
           this.syncPlayerSocietyStatus(society, state)
-          this.registerSocietyPortraitLooks(society, state)
+          this.restoreSocietyPortraitLooks(state)
           this.allowAchievementsWithSociety(state)
           society.lastEnsureKey = this.ensureKey(society, state)
           this.save(society)
@@ -1126,10 +1126,12 @@
           })
         },
         registerSocietyPortraitLooks(society, state) {
-          if (typeof daapi === 'undefined' || !daapi.addCharacterLook || !state || !state.characters) {
+          this.restoreSocietyPortraitLooks(state)
+        },
+        restoreSocietyPortraitLooks(state) {
+          if (!state || !state.characters) {
             return
           }
-          let targets = []
           for (let characterId in state.characters) {
             if (!state.characters.hasOwnProperty(characterId)) {
               continue
@@ -1137,54 +1139,13 @@
             let character = state.characters[characterId]
             if (
               character &&
-              !character.corSocietyOutfit &&
               character.look &&
               character.look.group === 'cor_society' &&
               character.corSocietyOriginalLook
             ) {
+              character.id = character.id || characterId
               this.restoreOriginalLookIfNeeded(character, true)
             }
-            if (!character || !this.shouldUseSocietyPortrait(character)) {
-              continue
-            }
-            character.id = character.id || characterId
-            targets.push(character)
-          }
-          if (!targets.length) {
-            return
-          }
-          let types = {}
-          targets.forEach((character) => {
-            let type = this.societyLookType(character)
-            let rawGender = character.gender || ((character.look || {}).gender) || (character.isMale ? 'male' : 'female')
-            let gender = rawGender === 'female' ? 'female' : 'male'
-            let genders = gender === 'female' ? ['female'] : gender === 'male' ? ['male'] : ['male', 'female']
-            types[type] = types[type] || { male: {}, female: {} }
-            genders.forEach((currentGender) => {
-              ;['baby', 'teen', 'adult', 'old'].forEach((ageStage) => {
-                let clone = this.characterCloneForSocietyLook(character, currentGender, ageStage)
-                let house = this.houseForPortraitCharacter(clone, society)
-                types[type][currentGender][ageStage] = this.nativeCharacterPortraitWithOutfit(clone, state, house, character.corSocietyOutfit || 'auto')
-              })
-            })
-            if (!types[type].male.baby) {
-              ;['baby', 'teen', 'adult', 'old'].forEach((ageStage) => {
-                types[type].male[ageStage] = types[type][genders[0]][ageStage]
-              })
-            }
-            if (!types[type].female.baby) {
-              ;['baby', 'teen', 'adult', 'old'].forEach((ageStage) => {
-                types[type].female[ageStage] = types[type][genders[0]][ageStage]
-              })
-            }
-          })
-          try {
-            daapi.addCharacterLook({ group: 'cor_society', types })
-            targets.forEach((character) => {
-              this.applySocietyLookToCharacter(character, this.societyLookType(character))
-            })
-          } catch (err) {
-            console.warn(err)
           }
         },
         characterCloneForSocietyLook(character, gender, ageStage) {
@@ -1201,39 +1162,7 @@
           }
         },
         applySocietyLookToCharacter(character, type) {
-          let currentLook = character.look || {}
-          if (!character.corSocietyOriginalLook && currentLook.group !== 'cor_society') {
-            character.corSocietyOriginalLook = { ...currentLook }
-          }
-          let rawGender = character.gender || currentLook.gender || (character.isMale ? 'male' : 'female')
-          let gender = rawGender === 'female' ? 'female' : 'male'
-          let newLook = {
-            group: 'cor_society',
-            type,
-            gender,
-            isDAAPI: true
-          }
-          if (
-            currentLook.group === newLook.group &&
-            currentLook.type === newLook.type &&
-            currentLook.gender === newLook.gender &&
-            currentLook.isDAAPI === true
-          ) {
-            return
-          }
-          character.look = newLook
-          try {
-            daapi.updateCharacter({
-              characterId: character.id,
-              character: {
-                look: newLook,
-                corSocietyOriginalLook: character.corSocietyOriginalLook || {}
-              }
-            })
-            daapi.forceUpdateCharacterDisplay({ characterId: character.id })
-          } catch (err) {
-            console.warn(err)
-          }
+          this.restoreOriginalLookIfNeeded(character, true)
         },
         restoreOriginalLookIfNeeded(character, includeGenerated) {
           if (!character || (!includeGenerated && character.corSocietyGenerated) || !character.corSocietyOriginalLook) {
@@ -2878,12 +2807,14 @@
           } catch (err) {
             console.warn(err)
           }
-          if (!character.corSocietyOutfit) {
+          if (
+            !character.corSocietyOutfit ||
+            (character.look && character.look.group === 'cor_society' && character.corSocietyOriginalLook)
+          ) {
             this.restoreOriginalLookIfNeeded(character, true)
           }
-          this.registerSocietyPortraitLooks(this.ensure(), daapi.getState())
           try {
-            daapi.forceUpdateCharacterDisplay({ characterId })
+            this.applyPortraitOverlays()
           } catch (err) {
             console.warn(err)
           }
@@ -5319,10 +5250,7 @@
           if (this.isImageData(portrait)) {
             return portrait
           }
-          if (this.isSocietyGeneratedCharacter(character, house)) {
-            return this.generatedCharacterPortrait(character, state, house)
-          }
-          return this.generatedCharacterPortrait(character, state, house)
+          return this.genericVanillaCharacterPortrait(character, state)
         },
         isSocietyGeneratedCharacter(character, house) {
           return !!(
@@ -5334,15 +5262,25 @@
           try {
             character = character || {}
             let look = character.look || {}
+            if (look.group === 'cor_society' && character.corSocietyOriginalLook) {
+              look = character.corSocietyOriginalLook
+            }
             let age = this.age(character, state || daapi.getState())
             let gender = character.gender || look.gender || (character.isMale ? 'male' : 'female')
             let ageStage = look.ageStage || this.characterAgeStage(age)
-            let portrait = daapi.getCharacterIcon({
-              group: look.group || 'roman',
-              gender,
-              type: look.type || 'brown',
-              ageStage
-            })
+            let group = look.group || 'roman'
+            let type = look.type || 'brown'
+            let portrait = false
+            if (look.isDAAPI && daapi.getCharacterIcon) {
+              portrait = daapi.getCharacterIcon({
+                group,
+                gender,
+                type,
+                ageStage
+              })
+            } else if (daapi.requireImage) {
+              portrait = daapi.requireImage('icons/characters/' + group + '/' + type + '/' + gender + '/' + ageStage + '.svg')
+            }
             if (this.isImageData(portrait)) {
               return portrait
             }
@@ -5350,6 +5288,21 @@
             console.warn(err)
           }
           return false
+        },
+        genericVanillaCharacterPortrait(character, state) {
+          try {
+            character = character || {}
+            let look = character.look || {}
+            let age = this.age(character, state || daapi.getState())
+            let gender = character.gender || look.gender || (character.isMale ? 'male' : 'female')
+            gender = gender === 'female' ? 'female' : 'male'
+            let ageStage = look.ageStage || this.characterAgeStage(age)
+            let suffix = ageStage === 'adult' ? '' : '_' + ageStage
+            return daapi.requireImage('icons/characters/' + gender + suffix + '.svg')
+          } catch (err) {
+            console.warn(err)
+          }
+          return ''
         },
         nativeCharacterPortraitWithOutfit(character, state, house, outfit) {
           state = state || daapi.getState()
@@ -5375,19 +5328,70 @@
           }
           let basePortrait = this.vanillaCharacterPortrait(baseCharacter, state)
           if (!this.isImageData(basePortrait)) {
-            return this.generatedCharacterPortrait(character, state, house)
+            basePortrait = this.genericVanillaCharacterPortrait(baseCharacter, state)
+          }
+          if (!this.isImageData(basePortrait)) {
+            return ''
           }
           if (!outfit || outfit === 'auto') {
             return basePortrait
           }
           let role = this.characterPortraitRole(character, ageStage, (house && house.stratum) || this.playerStratum(state))
-          let baseHref = this.imageHref(basePortrait)
+          let baseHref = this.inlineImageHref(basePortrait)
+          if (!baseHref) {
+            return basePortrait
+          }
           let svg = ''
           svg += '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="512" height="512" viewBox="0 0 512 512">'
           svg += '<image href="' + this.escapeSvg(baseHref) + '" xlink:href="' + this.escapeSvg(baseHref) + '" x="0" y="0" width="512" height="512" preserveAspectRatio="xMidYMid meet"/>'
           svg += this.nativeClothingOverlaySvg(outfit, gender, ageStage, role)
           svg += '</svg>'
           return this.svgDataUri(svg)
+        },
+        inlineImageHref(value) {
+          value = this.imageHref(value)
+          if (!value) {
+            return ''
+          }
+          if (value.indexOf('data:image/') === 0) {
+            return value
+          }
+          this.inlineImageCache = this.inlineImageCache || {}
+          if (this.inlineImageCache[value]) {
+            return this.inlineImageCache[value]
+          }
+          this.preloadInlineImage(value)
+          return ''
+        },
+        preloadInlineImage(value) {
+          if (!value || typeof fetch === 'undefined') {
+            return
+          }
+          this.inlineImagePending = this.inlineImagePending || {}
+          if (this.inlineImagePending[value]) {
+            return
+          }
+          this.inlineImagePending[value] = true
+          fetch(value)
+            .then((response) => response.text())
+            .then((text) => {
+              this.inlineImageCache = this.inlineImageCache || {}
+              this.inlineImageCache[value] = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(text)
+              delete this.inlineImagePending[value]
+              if (typeof window !== 'undefined' && window.corSociety) {
+                window.setTimeout(() => {
+                  try {
+                    window.corSociety.applyPortraitOverlays()
+                  } catch (err) {
+                    console.warn(err)
+                  }
+                }, 50)
+              }
+            })
+            .catch((err) => {
+              delete this.inlineImagePending[value]
+              console.warn(err)
+            })
         },
         imageHref(value) {
           value = String(value || '')
@@ -5992,8 +5996,26 @@
           if (!state || !state.characters) {
             return
           }
+          this.restoreClearedPortraitOverlays(state)
           this.applyCurrentCharacterPortraitOverlay(state)
           this.applyAttributedCharacterPortraitOverlays(state)
+        },
+        restoreClearedPortraitOverlays(state) {
+          let images = Array.prototype.slice.call(document.querySelectorAll('img[data-cor-society-original-src]'))
+          images.forEach((img) => {
+            let id = img.getAttribute('data-cor-society-character-id') || this.characterIdFromElement(img)
+            let character = id && state.characters[id]
+            if (character && this.shouldUseSocietyPortrait(character)) {
+              return
+            }
+            let original = img.getAttribute('data-cor-society-original-src')
+            if (original) {
+              img.src = original
+            }
+            img.removeAttribute('data-cor-society-original-src')
+            img.removeAttribute('data-cor-society-portrait-src')
+            img.removeAttribute('data-cor-society-character-id')
+          })
         },
         applyCurrentCharacterPortraitOverlay(state) {
           let currentId = this.currentCharacterId(state)
@@ -6040,6 +6062,9 @@
           }
           if (!img.getAttribute('data-cor-society-original-src')) {
             img.setAttribute('data-cor-society-original-src', img.getAttribute('src') || img.src || '')
+          }
+          if (character && character.id) {
+            img.setAttribute('data-cor-society-character-id', character.id)
           }
           img.setAttribute('data-cor-society-portrait-src', portrait)
           img.src = portrait
