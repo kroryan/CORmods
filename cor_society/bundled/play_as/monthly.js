@@ -1,1 +1,0 @@
-['/cor_society/bundled/play_as/main']

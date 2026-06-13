@@ -1,1 +1,0 @@
-['/cor_society/bundled/disinheritance/main']
